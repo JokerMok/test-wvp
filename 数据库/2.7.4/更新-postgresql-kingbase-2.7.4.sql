@@ -1,0 +1,132 @@
+create table IF NOT EXISTS wvp_jt_terminal (
+                                 id serial primary key,
+                                 phone_number character varying(50),
+                                 terminal_id character varying(50),
+                                 province_id character varying(50),
+                                 province_text character varying(100),
+                                 city_id character varying(50),
+                                 city_text character varying(100),
+                                 maker_id character varying(50),
+                                 model character varying(50),
+                                 plate_color character varying(50),
+                                 plate_no character varying(50),
+                                 longitude double precision,
+                                 latitude double precision,
+                                 status bool default false,
+                                 register_time character varying(50) default null,
+                                 update_time character varying(50) not null,
+                                 create_time character varying(50) not null,
+                                 geo_coord_sys character varying(50),
+                                 media_server_id character varying(50) default 'auto',
+                                 sdp_ip character varying(50),
+                                 constraint uk_jt_device_id_device_id unique (id, phone_number)
+);
+create table IF NOT EXISTS wvp_jt_channel (
+                                id serial primary key,
+                                terminal_db_id integer,
+                                channel_id integer,
+                                has_audio bool default false,
+                                name character varying(255),
+                                update_time character varying(50) not null,
+                                create_time character varying(50) not null,
+                                constraint uk_jt_channel_id_device_id unique (terminal_db_id, channel_id)
+);
+
+ALTER table wvp_media_server ADD COLUMN IF NOT EXISTS jtt_proxy_port integer;
+ALTER table wvp_media_server ADD COLUMN IF NOT EXISTS mp4_port integer;
+ALTER table wvp_media_server ADD COLUMN IF NOT EXISTS mp4_ssl_port integer;
+
+ALTER table wvp_device_channel ADD COLUMN IF NOT EXISTS enable_broadcast integer default 0;
+ALTER table wvp_device_channel ADD COLUMN IF NOT EXISTS map_level integer default 0;
+ALTER table wvp_common_group ADD COLUMN IF NOT EXISTS alias varchar(255) default null;
+ALTER table wvp_stream_proxy DROP COLUMN IF EXISTS enable_remove_none_reader;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'uk_media_server_unique_ip_http_port'
+      AND connamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
+  ) THEN
+ALTER TABLE wvp_media_server DROP CONSTRAINT uk_media_server_unique_ip_http_port;
+END IF;
+END;
+$$;
+
+ALTER table wvp_device DROP COLUMN IF EXISTS register_time;
+ALTER table wvp_device DROP COLUMN IF EXISTS keepalive_time;
+
+create table IF NOT EXISTS wvp_alarm (
+    id serial primary key,
+    channel_id integer,
+    description character varying(255),
+    snap_path character varying(255),
+    record_path character varying(255),
+    longitude double precision,
+    latitude double precision,
+    alarm_type integer,
+    alarm_time bigint
+);
+COMMENT ON COLUMN wvp_alarm.id IS '主键ID';
+COMMENT ON COLUMN wvp_alarm.channel_id IS '关联通道的数据库id';
+COMMENT ON COLUMN wvp_alarm.description IS '报警描述';
+COMMENT ON COLUMN wvp_alarm.snap_path IS '报警快照路径';
+COMMENT ON COLUMN wvp_alarm.record_path IS '报警录像路径';
+COMMENT ON COLUMN wvp_alarm.longitude IS '报警附带的经度';
+COMMENT ON COLUMN wvp_alarm.latitude IS '报警附带的纬度';
+COMMENT ON COLUMN wvp_alarm.alarm_type IS '报警类别';
+COMMENT ON COLUMN wvp_alarm.alarm_time IS '报警时间';
+
+
+/*
+* 20260521 添加wvp_device_channel唯一约束，防止通道重复写入
+*/
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes
+                   WHERE tablename = 'wvp_device_channel'
+                     AND indexname = 'uk_device_channel_source') THEN
+        -- 先清理可能的重复数据
+        DELETE FROM wvp_device_channel t1
+        USING wvp_device_channel t2
+        WHERE t1.id < t2.id
+          AND t1.data_device_id = t2.data_device_id
+          AND t1.device_id = t2.device_id;
+        ALTER TABLE wvp_device_channel ADD CONSTRAINT uk_device_channel_source UNIQUE (data_device_id, device_id);
+    END IF;
+END;
+$$;
+
+
+/*
+* 20260417 将 wvp_device_mobile_position从专属国标的位置记录表，改为通用通道共用的位置记录表
+* 仅当 wvp_device_mobile_position 表存在时才执行后续改动，表不存在则静默跳过
+*/
+DO $$
+BEGIN
+ IF TO_REGCLASS('wvp_device_mobile_position') IS NOT NULL THEN
+    ALTER TABLE wvp_device_mobile_position ADD COLUMN IF NOT EXISTS timestamp int8;
+    UPDATE wvp_device_mobile_position SET timestamp = EXTRACT(EPOCH FROM time::timestamp) * 1000;
+    ALTER TABLE wvp_device_mobile_position DROP COLUMN IF EXISTS time;
+    ALTER TABLE wvp_device_mobile_position DROP COLUMN IF EXISTS device_id;
+    ALTER TABLE wvp_device_mobile_position DROP COLUMN IF EXISTS device_name;
+    ALTER TABLE wvp_device_mobile_position DROP COLUMN IF EXISTS report_source;
+
+    -- 修改表名
+    ALTER TABLE wvp_device_mobile_position RENAME TO wvp_mobile_position;
+    COMMENT ON COLUMN wvp_mobile_position.timestamp IS '上报时间';
+ END IF;
+END;
+$$;
+
+/*
+* 20260606 添加用户默认密码标记字段（默认密码强制修改）
+*/
+ALTER TABLE wvp_user ADD COLUMN IF NOT EXISTS default_password bool default false;
+COMMENT ON COLUMN wvp_user.default_password IS '是否使用默认密码';
+
+-- 仅当 admin 的密码仍是默认密码时才标记 default_password=TRUE，已改过密码的不强制
+UPDATE wvp_user
+   SET default_password = TRUE
+ WHERE username = 'admin'
+   AND password = '21232f297a57a5a743894a0e4a801fc3';
