@@ -45,7 +45,7 @@ response, login_user = api('/api/user/login', login)
 token = response.get('access-token') or login_user['accessToken']
 authorized = {'access-token': token}
 _, version = api('/api/server/version', extra=authorized)
-assert version['GIT_Revision'] == args.sha, 'Unexpected running Git revision'
+assert version.get('git_Revision', version.get('GIT_Revision')) == args.sha, 'Unexpected running Git revision'
 _, devices = api('/api/device/query/devices?page=1&count=10', extra=authorized)
 assert 'total' in devices and isinstance(devices['list'], list), 'GB28181 device query failed'
 _, nodes = api('/api/server/media_server/online/list', extra=authorized)
