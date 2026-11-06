@@ -1,0 +1,11 @@
+[Unit]
+Description=Test WVP cascade RTP ingress on TCP %i
+
+[Socket]
+ListenStream=10.1.0.12:%i
+FreeBind=yes
+IPAddressDeny=any
+IPAddressAllow=localhost 47.106.174.114/32
+
+[Install]
+WantedBy=sockets.target

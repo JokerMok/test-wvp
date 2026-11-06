@@ -1,0 +1,9 @@
+[Unit]
+Description=Forward test WVP cascade RTP on TCP %i to ZLMediaKit
+
+[Service]
+ExecStart=/usr/lib/systemd/systemd-socket-proxyd --connections-max=8 --exit-idle-time=20s 127.0.0.1:%i
+DynamicUser=yes
+NoNewPrivileges=yes
+IPAddressDeny=any
+IPAddressAllow=localhost

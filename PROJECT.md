@@ -27,13 +27,14 @@ SSH 隧道可用于内部访问。建立隧道后打开 [内部测试入口](htt
 ssh -N -L 127.0.0.1:28083:127.0.0.1:18083 tencent-main
 ```
 
-切换网页入口用 `sudo /srv/apps/test-wvp/deploy/enable-entry.sh public`，切回仅内部访问用 `sudo /srv/apps/test-wvp/deploy/enable-entry.sh internal`。启用前的内部配置备份为 `/srv/ops/rollback/caddy/test-wvp.FREfV1VY`。设备 RTP 和管理端口限本机访问。
+切换网页入口用 `sudo /srv/apps/test-wvp/deploy/enable-entry.sh public`，切回仅内部访问用 `sudo /srv/apps/test-wvp/deploy/enable-entry.sh internal`。启用前的内部配置备份为 `/srv/ops/rollback/caddy/test-wvp.FREfV1VY`。WVP HTTP、数据库和媒体管理端口均绑定本机回环地址。
 
 国标域和端口沿用线上包 `docker/.env` 的 `SIP_Domain` 和 `SIP_Port`，注册参数取自 `docker/wvp/wvp/application-docker.yml`。测试编号按用户指定配置，生效配置保存在服务器 `shared/config/application.yml`。页面隐藏已设置的测试 SIP 密码。
 
 腾讯云将公网 IP `175.178.236.56` 映射到网卡 `eth0` 的 `10.1.0.12`。SIP 监听该网卡的 TCP/UDP 5060。主机 UFW 和腾讯云轻量实例防火墙均已允许两种协议的 IPv4 入站。服务通过 `/etc/systemd/system/test-wvp.service.d/10-sip-public.conf` 接收公网 IPv4，并让 SIP 信令使用公网地址。
 
 回退 SIP 公网接入时，先删除本次新增的云防火墙规则，再执行以下主机命令。
+如果同时启用了下文的级联收流，先回退收流配置。
 
 ```sh
 sudo ufw delete allow in on eth0 from 0.0.0.0/0 to 10.1.0.12 port 5060 proto tcp
@@ -42,6 +43,32 @@ sudo install -o root -g test-wvp -m 0640 /srv/apps/test-wvp/shared/backups/sip-p
 sudo rm /etc/systemd/system/test-wvp.service.d/10-sip-public.conf
 sudo systemctl daemon-reload
 sudo systemctl restart test-wvp.service
+```
+
+## 正式平台级联收流
+
+测试服使用 TCP 被动模式。点播时向正式平台通告 `175.178.236.56` 和从 `30000–30039` 分配的动态端口。主机 UFW 仅允许来源 `47.106.174.114/32` 访问这段 TCP 端口。腾讯云轻量实例防火墙也需要允许同一来源和端口范围。
+
+在 `shared/config/application.yml` 设置 `media.sdp-ip` 为公网 IP、`media.rtp.port-range` 为 `30000,30039`，并在 `shared/config/media/config.ini` 的 `[rtp_proxy]` 设置 `port_range=30000-30039`。将 `deploy/tencent/systemd/test-wvp-rtp@.socket` 和 `test-wvp-rtp@.service` 安装到 `/etc/systemd/system/`，执行 `systemctl daemon-reload`，启用 `test-wvp-rtp@30000.socket` 至 `test-wvp-rtp@30038.socket` 中的偶数端口。转发服务在有连接时启动，将 TCP 流量转发到 ZLMediaKit 的同端口回环监听。主机规则如下。
+
+```sh
+sudo ufw allow in on eth0 from 47.106.174.114 to 10.1.0.12 port 30000:30039 proto tcp comment 'test-wvp cascade RTP TCP'
+sudo systemctl restart test-wvp-media.service test-wvp.service
+```
+
+回退时先删除相应的腾讯云防火墙规则，再在服务器执行以下命令。应用和媒体服务需要联合重启。
+
+```bash
+sudo ufw delete allow in on eth0 from 47.106.174.114 to 10.1.0.12 port 30000:30039 proto tcp
+sudo systemctl disable --now test-wvp-rtp@{30000..30038..2}.socket
+sudo systemctl stop 'test-wvp-rtp@*.service'
+sudo rm /etc/systemd/system/test-wvp-rtp@.socket /etc/systemd/system/test-wvp-rtp@.service
+sudo systemctl daemon-reload
+app=/srv/apps/test-wvp
+backup=$app/shared/backups/rtp-cascade-20261106T040431Z
+sudo cp -a "$backup/application.yml" "$app/shared/config/application.yml"
+sudo cp -a "$backup/media-config.ini" "$app/shared/config/media/config.ini"
+sudo systemctl restart test-wvp-media.service test-wvp.service
 ```
 
 ## 更新与回退
@@ -72,3 +99,7 @@ ssh tencent-main "sudo /srv/apps/test-wvp/deploy/manage.sh install $sha" < "$pac
 公网 Chrome 已通过入口认证和 WVP 登录，登录 API 请求保持同源。公网 API 实测返回当前版本，国标设备列表为空，媒体节点在线。
 
 从 Mac 向公网 IP 的 TCP 和 UDP 5060 发送合成 SIP REGISTER，两种协议均返回预期国标域的 401 Digest 挑战。ZLMediaKit 在先前的内部检查中分配了位于规定范围的本机 RTP/RTCP UDP 配对端口。真实摄像头、天影云级联和长时播放待实测。
+
+正式平台已注册并同步 3 个通道。原点播收到 SIP 200 OK，测试服通告的收流地址为 `127.0.0.1`。2026-11-06 用户添加腾讯云 TCP 规则后，复测通道尾号 `0001`。正式平台连接测试服公网动态端口，WVP 点播 API 成功，ZLMediaKit 报告 H.265 视频轨道就绪，测试域名 HTTPS 返回有效 FLV 数据。
+
+点播修复前的 SIP 抓包另见正式平台在测试服回复心跳 200 OK 后发送注销，20 秒后重新注册。需要正式平台日志确认触发原因。验收范围为一路短时点播。
