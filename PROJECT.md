@@ -2,9 +2,9 @@
 
 ## 当前部署
 
-- 2026-11-06 在 `tencent-main` 完成部署和公网接入。应用版本为 `2.7.4`，运行提交为 `d1da553757764c5a5326c5eab3dd5a824de02977`，已核对运行 API、发布清单与 GitHub 提交。[私有仓库](https://github.com/JokerMok/test-wvp)
-- 源码以正式环境归档为基线，纳入 2026-11-05 的 UDP 修订。测试环境使用独立空库和新生成的凭证。来源及原归档校验值见 `SOURCE.md`。
-- 发布包 SHA-256 为 `5a8b9af78919c95b497455fd8fb2517a3d8e50e3ca4dfa4ccf17f38fbb1ef9da`，原件留在 Mac 项目的 `releases/` 下。服务器以 `current/RELEASE.json` 标识版本，`current/SHA256SUMS` 覆盖 JAR、数据库初始化 SQL 和正式静态文件。JAR SHA-256 为 `27db37756e127dd431e6e5ff40472e46cc1c8c96cea010a248a775a555dd1cb3`。
+- 2026-11-06 在 `tencent-main` 完成部署和公网接入。应用版本为 `2.7.4`，当前网页和入口配置提交为 `75f8991a6ca8058ce65a2bc73efeca8ba460c1a0`，后端运行提交为 `d1da553757764c5a5326c5eab3dd5a824de02977`。版本以 `current/RELEASE.json` 为准。[私有仓库](https://github.com/JokerMok/test-wvp)
+- 源码以正式环境归档为基线，纳入 2026-11-05 的 UDP 修订。测试环境使用独立数据库和凭证。来源及原归档校验值见 `SOURCE.md`。
+- 当前前端发布包 SHA-256 为 `2eabf0e00613815e2f875720ffd9236e4635dd51908b8e92a98198327140b02f`，安装时复用并校验上一版的 JAR（SHA-256 `27db37756e127dd431e6e5ff40472e46cc1c8c96cea010a248a775a555dd1cb3`）。上一版完整发布包 SHA-256 为 `5a8b9af78919c95b497455fd8fb2517a3d8e50e3ca4dfa4ccf17f38fbb1ef9da`。两份包均存放在 Mac 项目的 `releases/` 下，服务器的 `current/SHA256SUMS` 覆盖 JAR、数据库初始化 SQL 和正式静态文件。
 - 项目目录为 `/srv/apps/test-wvp`。`test-wvp{,-db,-cache,-media}.service` 均已启动并启用开机自启。WVP 使用宿主 Java 21，MySQL 8.4.11 与 Redis 8.0.5 为独立实例。ZLMediaKit 使用官方 `linux/amd64` 镜像 `sha256:f0022a9ebe3085f2710a5a9312975564f22a8c8449be88217b55ce7e3cf9539b` 的校验后运行文件，来源为腾讯云镜像端点。
 
 | 组件 | 服务器地址 |
@@ -13,11 +13,11 @@
 | WVP HTTP | `127.0.0.1:18978` |
 | SIP | 公网 `175.178.236.56:5060` TCP/UDP，主机监听 `10.1.0.12:5060` |
 | MySQL 与 Redis | `127.0.0.1:18979`，`127.0.0.1:18977` |
-| ZLMediaKit | `127.0.0.1:18980` HTTP，`18983` RTMP，`18984` RTSP，`18985` RTP。国标 UDP 收流范围 `30000–30500`，配对 RTCP 最多到 `30501` |
+| ZLMediaKit | `127.0.0.1:18980` HTTP，`18983` RTMP，`18984` RTSP，`18985` RTP。正式平台级联媒体端口 `30000–30039` |
 
 ## 访问
 
-打开 [公网测试入口](https://wvp.shizibandu.icu/)，先通过 Caddy 入口认证，再登录 WVP。两组凭证存放于服务器 `/srv/apps/test-wvp/shared/config/access.env`，仅 root 可读。
+打开公网测试入口后，直接使用 WVP 账号登录。测试账号的凭证存放在服务器 `/srv/apps/test-wvp/shared/config/access.env`，仅 root 可读。[公网测试入口](https://wvp.shizibandu.icu/)
 
 用户在腾讯云控制台添加了 `wvp A 175.178.236.56`（默认线路，TTL 600 秒），并确认主域名的腾讯云备案接入正常。两台 DNSPod 权威服务器返回一致。Mac 实测 HTTP 308 跳转到 HTTPS，Let's Encrypt 证书受信任，有效期至 2027-02-04。
 
@@ -29,7 +29,7 @@ ssh -N -L 127.0.0.1:28083:127.0.0.1:18083 tencent-main
 
 切换网页入口用 `sudo /srv/apps/test-wvp/deploy/enable-entry.sh public`，切回仅内部访问用 `sudo /srv/apps/test-wvp/deploy/enable-entry.sh internal`。启用前的内部配置备份为 `/srv/ops/rollback/caddy/test-wvp.FREfV1VY`。WVP HTTP、数据库和媒体管理端口均绑定本机回环地址。
 
-国标域和端口沿用线上包 `docker/.env` 的 `SIP_Domain` 和 `SIP_Port`，注册参数取自 `docker/wvp/wvp/application-docker.yml`。测试编号按用户指定配置，生效配置保存在服务器 `shared/config/application.yml`。页面隐藏已设置的测试 SIP 密码。
+国标域和端口沿用线上包 `docker/.env` 的 `SIP_Domain` 和 `SIP_Port`。测试编号按用户指定配置，SIP 注册密码保存在服务器 `shared/config/application.yml` 的 `sip.password`。登录后到「设备接入 → 国标设备 → 接入信息」查看当前值。更改密码后，需在发起级联的正式平台同步该条配置的「SIP认证密码」。
 
 腾讯云将公网 IP `175.178.236.56` 映射到网卡 `eth0` 的 `10.1.0.12`。SIP 监听该网卡的 TCP/UDP 5060。主机 UFW 和腾讯云轻量实例防火墙均已允许两种协议的 IPv4 入站。服务通过 `/etc/systemd/system/test-wvp.service.d/10-sip-public.conf` 接收公网 IPv4，并让 SIP 信令使用公网地址。
 
@@ -91,14 +91,25 @@ ssh tencent-main "sudo /srv/apps/test-wvp/deploy/manage.sh install $sha" < "$pac
 
 更新前确认新发布解压后仍有至少 2 GiB 可用空间，供现有备份任务运行。本轮为满足门槛清理了可重建的 APT 下载包和索引缓存，下次安装依赖前运行 `apt-get update`。脚本校验发布文件和数据库初始化脚本，更新前备份，健康检查通过后记录 `previous`。发布失败会恢复已有可用版本。若初始化 SQL 或其他迁移行为发生变化，先单独评估迁移和数据恢复。
 
-在服务器用 `sudo /srv/apps/test-wvp/deploy/manage.sh status` 查看状态。首次部署暂无 `previous`。以后通过 `sudo /srv/apps/test-wvp/deploy/manage.sh rollback` 切回上一份通过验证且兼容当前数据库的应用发布。数据库和文件恢复按备份单独处理。
+在服务器用 `sudo /srv/apps/test-wvp/deploy/manage.sh status` 查看状态，用 `sudo /srv/apps/test-wvp/deploy/manage.sh rollback` 切回 `previous` 所指的已验证版本，当前为 `d1da553757764c5a5326c5eab3dd5a824de02977`。数据库和文件恢复按备份单独处理。
+
+如需同时撤回此次 SIP 密码及入口变更，先确认 `previous` 仍指向上述版本，再执行以下命令恢复配置及发布。
+
+```bash
+app=/srv/apps/test-wvp
+backup=$app/shared/backups/sip-web-access-20261106T055141Z
+sudo install -o root -g test-wvp -m 0640 "$backup/application.yml" "$app/shared/config/application.yml"
+sudo install -o root -g root -m 0644 "$backup/internal.caddy" "$backup/public.caddy" "$app/deploy/"
+sudo "$app/deploy/enable-entry.sh" public
+sudo "$app/deploy/manage.sh" rollback
+```
 
 ## 数据和备份
 
-- `shared/config` 保存应用、MySQL、Redis、媒体、入口认证与 JWK，`shared/data` 保存 MySQL、Redis 和服务运行数据，`shared/uploads` 保存快照和录像。WVP 同时写入 journald 和 `shared/data/wvp/logs`。历史文件最多保留 7 天，滚动文件总量上限 32 MB。媒体日志在 `shared/data/media/logs`。
+- `shared/config` 保存应用、MySQL、Redis、媒体配置与 JWK，`shared/data` 保存 MySQL、Redis 和服务运行数据，`shared/uploads` 保存快照和录像。WVP 同时写入 journald 和 `shared/data/wvp/logs`。历史文件最多保留 7 天，滚动文件总量上限 32 MB。媒体日志在 `shared/data/media/logs`。
 - `/etc/server-ops/backup.d/test-wvp.sh` 已接入现有 `server-config-backup.timer`。钩子使用 MySQL `mysqldump --single-transaction`、Redis RDB 快照以及上传目录归档。此次单独执行钩子，通过校验及隔离 MySQL 恢复，恢复库含 22 张 InnoDB 表与 1 个测试账号。验证备份位于 `shared/backups/verify-20261106.ZsyR5mRH/test-wvp`。定时任务下次运行会纳入项目钩子。
 
-运维中心的历史日志由 `deploy/tencent/logback.xml` 的 `RollingFile` 提供，实时日志使用同一配置的 `WebLog` 推送。Caddy 只代理日志列表、合法文件名的读取和 `/channel/log` WebSocket 握手。公网仍要求 Caddy 入口认证和 WVP 登录。2026-11-06 从 journald 补入 1,313 条既有 WVP 记录。已验证公网历史列表、文件预览与下载、实时日志帧，以及未登录的拒绝响应。
+运维中心的历史日志由 `deploy/tencent/logback.xml` 的 `RollingFile` 提供，实时日志使用同一配置的 `WebLog` 推送。Caddy 只代理日志列表、合法文件名的读取和 `/channel/log` WebSocket 握手。公网日志和媒体资源要求 WVP 登录。2026-11-06 从 journald 补入 1,313 条既有 WVP 记录。已验证公网历史列表、文件预览与下载、实时日志帧，以及未登录的拒绝响应。
 
 日志配置回退文件在 `/srv/apps/test-wvp/shared/backups/log-module-20261106T042838Z/`。将其中的 `logback.xml` 和 `internal.caddy` 恢复到服务器项目的 `deploy/`，用 `deploy/enable-entry.sh public` 重载当前公网入口，再重启 `test-wvp.service`。已生成的历史文件保留在数据目录。
 
@@ -106,7 +117,7 @@ ssh tencent-main "sudo /srv/apps/test-wvp/deploy/manage.sh install $sha" < "$pac
 
 服务器和内部 Caddy 入口已验证登录、版本 API、国标设备列表、媒体节点在线、敏感管理路由拦截。Chrome 经 SSH 隧道完成表单登录并显示空设备表，WVP API 保持同源，Caddy 的内容安全策略拦截了播放器统计请求。快速离开仪表盘时，未返回的图表请求可触发 `setData` 异常，设备页和查询 API 仍正常。
 
-公网 Chrome 已通过入口认证和 WVP 登录，登录 API 请求保持同源。公网 API 实测返回当前版本，国标设备列表为空，媒体节点在线。
+全新浏览器会话从公网入口直接打开 WVP 登录页，登录后在「国标设备 → 接入信息」显示当前 SIP 注册密码。公网验证了未登录无法读取接入配置、日志和受保护的媒体资源。合成 SIP REGISTER 在摘要认证后返回 200。此次切换后，正式平台的注册请求收到 403，需同步该条级联的 SIP 认证密码后复测。
 
 从 Mac 向公网 IP 的 TCP 和 UDP 5060 发送合成 SIP REGISTER，两种协议均返回预期国标域的 401 Digest 挑战。ZLMediaKit 在先前的内部检查中分配了位于规定范围的本机 RTP/RTCP UDP 配对端口。真实摄像头、天影云级联和长时播放待实测。
 
