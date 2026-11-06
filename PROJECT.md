@@ -10,7 +10,8 @@
 | 组件 | 服务器地址 |
 | --- | --- |
 | Caddy 内部入口 | `127.0.0.1:18083` |
-| WVP HTTP 与 SIP | `127.0.0.1:18978`，`127.0.0.1:5060` TCP/UDP |
+| WVP HTTP | `127.0.0.1:18978` |
+| SIP | 公网 `175.178.236.56:5060` TCP/UDP，主机监听 `10.1.0.12:5060` |
 | MySQL 与 Redis | `127.0.0.1:18979`，`127.0.0.1:18977` |
 | ZLMediaKit | `127.0.0.1:18980` HTTP，`18983` RTMP，`18984` RTSP，`18985` RTP。国标 UDP 收流范围 `30000–30500`，配对 RTCP 最多到 `30501` |
 
@@ -26,11 +27,22 @@ SSH 隧道可用于内部访问。建立隧道后打开 [内部测试入口](htt
 ssh -N -L 127.0.0.1:28083:127.0.0.1:18083 tencent-main
 ```
 
-切换公网入口用 `sudo /srv/apps/test-wvp/deploy/enable-entry.sh public`，切回仅内部访问用 `sudo /srv/apps/test-wvp/deploy/enable-entry.sh internal`。本次启用前的内部配置备份为 `/srv/ops/rollback/caddy/test-wvp.FREfV1VY`。设备 SIP、RTP 和管理端口均限本机访问。
+切换网页入口用 `sudo /srv/apps/test-wvp/deploy/enable-entry.sh public`，切回仅内部访问用 `sudo /srv/apps/test-wvp/deploy/enable-entry.sh internal`。启用前的内部配置备份为 `/srv/ops/rollback/caddy/test-wvp.FREfV1VY`。设备 RTP 和管理端口限本机访问。
 
-国标域和端口沿用线上包 `docker/.env` 的 `SIP_Domain` 和 `SIP_Port`，注册参数取自 `docker/wvp/wvp/application-docker.yml`。测试编号按用户指定配置。生效配置保存在服务器 `shared/config/application.yml`。接入信息显示腾讯云公网 IP `175.178.236.56`，SIP 实际监听 `127.0.0.1:5060`（TCP/UDP）。页面隐藏已设置的测试 SIP 密码。
+国标域和端口沿用线上包 `docker/.env` 的 `SIP_Domain` 和 `SIP_Port`，注册参数取自 `docker/wvp/wvp/application-docker.yml`。测试编号按用户指定配置，生效配置保存在服务器 `shared/config/application.yml`。页面隐藏已设置的测试 SIP 密码。
 
-修改这组配置后只需重启 `test-wvp.service`。如需回退本次编号和显示地址的修改，用 `sudo install -o root -g test-wvp -m 0640 /srv/apps/test-wvp/shared/backups/sip-identity-20261106T022552Z/application.yml /srv/apps/test-wvp/shared/config/application.yml` 恢复文件，再执行 `sudo systemctl restart test-wvp.service`。
+腾讯云将公网 IP `175.178.236.56` 映射到网卡 `eth0` 的 `10.1.0.12`。SIP 监听该网卡的 TCP/UDP 5060。主机 UFW 和腾讯云轻量实例防火墙均已允许两种协议的 IPv4 入站。服务通过 `/etc/systemd/system/test-wvp.service.d/10-sip-public.conf` 接收公网 IPv4，并让 SIP 信令使用公网地址。
+
+回退 SIP 公网接入时，先删除本次新增的云防火墙规则，再执行以下主机命令。
+
+```sh
+sudo ufw delete allow in on eth0 from 0.0.0.0/0 to 10.1.0.12 port 5060 proto tcp
+sudo ufw delete allow in on eth0 from 0.0.0.0/0 to 10.1.0.12 port 5060 proto udp
+sudo install -o root -g test-wvp -m 0640 /srv/apps/test-wvp/shared/backups/sip-public-20261106T023849Z/application.yml /srv/apps/test-wvp/shared/config/application.yml
+sudo rm /etc/systemd/system/test-wvp.service.d/10-sip-public.conf
+sudo systemctl daemon-reload
+sudo systemctl restart test-wvp.service
+```
 
 ## 更新与回退
 
@@ -59,4 +71,4 @@ ssh tencent-main "sudo /srv/apps/test-wvp/deploy/manage.sh install $sha" < "$pac
 
 公网 Chrome 已通过入口认证和 WVP 登录，登录 API 请求保持同源。公网 API 实测返回当前版本，国标设备列表为空，媒体节点在线。
 
-合成 SIP REGISTER 在本机 5060 端口收到与线上包国标域一致的 401 Digest 挑战。ZLMediaKit 在先前的内部检查中分配了位于规定范围的本机 RTP/RTCP UDP 配对端口。真实摄像头、天影云级联和长时播放待实测。
+从 Mac 向公网 IP 的 TCP 和 UDP 5060 发送合成 SIP REGISTER，两种协议均返回预期国标域的 401 Digest 挑战。ZLMediaKit 在先前的内部检查中分配了位于规定范围的本机 RTP/RTCP UDP 配对端口。真实摄像头、天影云级联和长时播放待实测。
