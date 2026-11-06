@@ -47,7 +47,7 @@ sudo systemctl restart test-wvp.service
 
 ## 正式平台级联收流
 
-测试服支持 UDP 和 TCP 被动收流。点播时向正式平台通告 `175.178.236.56`，从 `30000–30039` 分配媒体端口，UDP 的 RTP 和 RTCP 使用一对相邻端口。主机 UFW 仅允许来源 `47.106.174.114/32` 访问这段 TCP、UDP 端口。腾讯云实例防火墙需允许同一来源及端口范围。
+测试服支持 UDP 和 TCP 被动收流。点播时通告 `175.178.236.56`，从 `30000–30039` 分配媒体端口，UDP 的 RTP 和 RTCP 使用一对相邻端口。主机 UFW 允许正式平台 `47.106.174.114/32` 访问这段 TCP、UDP 端口。腾讯云实例防火墙需覆盖同一来源及端口范围。摄像机直连规则见下节。
 
 在 `shared/config/application.yml` 设置 `media.sdp-ip` 为公网 IP、`media.rtp.port-range` 为 `30000,30039`、`media.http-port` 为 `18981`。在 `shared/config/media/config.ini` 的 `[rtp_proxy]` 设置 `port_range=30000-30039`。将仓库的 `deploy/tencent/internal.caddy` 同步到服务器项目的 `deploy/internal.caddy`。Caddy 的本机入口 `127.0.0.1:18981` 将媒体 API 代理到 `127.0.0.1:18980`，为创建媒体端口的请求指定网卡地址 `10.1.0.12`。ZLMediaKit 在该地址直接接收 RTP 和发送 RTCP。把 `deploy/tencent/systemd/test-wvp-media.service.d/10-cascade-rtp.conf` 安装到同名的 `/etc/systemd/system/` 子目录，允许该媒体服务与正式平台通信。旧 TCP 转发 socket 已停用，因为媒体服务会在同一网卡上直接监听。
 
@@ -59,7 +59,7 @@ sudo /srv/apps/test-wvp/deploy/enable-entry.sh public
 sudo systemctl restart test-wvp-media.service test-wvp.service
 ```
 
-如需切回此前的 TCP 转发配置，先将设备的收流模式设为 TCP 被动，再在服务器执行以下命令。媒体进程退出后才能重新启用占用同一端口的 TCP 转发。
+如需切回此前的 TCP 转发配置，先撤回下节的摄像机直连规则，再将设备的收流模式设为 TCP 被动并执行以下命令。媒体进程退出后才能重新启用占用同一端口的 TCP 转发。
 
 ```bash
 app=/srv/apps/test-wvp
@@ -76,6 +76,21 @@ sudo systemctl start test-wvp-media.service test-wvp.service
 ```
 
 如需完全关闭级联媒体入口，再停用这些 TCP 转发 socket，并删除主机与云防火墙中该来源的媒体端口规则。
+
+## 摄像机 UDP 直连
+
+尾号 `0004` 的摄像机使用公网源 `14.26.144.35` 向测试服发送 RTP。2026-11-06 在腾讯云实例防火墙放行该来源后，为主机 UFW 增加来源 `14.26.144.35/32` 的 UDP `30000–30039` 入站规则，同时更新 `test-wvp-media.service` 的来源白名单。
+
+```sh
+sudo ufw allow in on eth0 from 14.26.144.35/32 to 10.1.0.12 port 30000:30039 proto udp comment 'test-wvp camera 0004 RTP UDP'
+printf '[Service]\nIPAddressAllow=14.26.144.35/32\n' | sudo tee /etc/systemd/system/test-wvp-media.service.d/20-camera-0004-rtp.conf >/dev/null
+sudo systemctl daemon-reload
+sudo systemctl restart test-wvp-media.service test-wvp.service
+```
+
+回退时删除上述 UFW 规则和 `20-camera-0004-rtp.conf`，重载 systemd 后重启这两个服务。变更前的规则记录在 `shared/backups/camera-0004-rtp-20261106T063729Z/`。腾讯云实例防火墙的摄像机来源规则在控制台独立维护。
+
+实测测试站点直接点播时收到来自该 IP 的 RTP，ZLMediaKit 识别出 H.265 视频。Mac 通过测试域名拉取 HTTPS-FLV，识别到 `2560×1440` 的视频轨道。此轮验证覆盖摄像机到测试服的 UDP 直连和测试域名的视频出口。
 
 ## 更新与回退
 
@@ -119,7 +134,7 @@ sudo "$app/deploy/manage.sh" rollback
 
 全新浏览器会话从公网入口直接打开 WVP 登录页，登录后在「国标设备 → 接入信息」显示当前 SIP 注册密码。公网验证了未登录无法读取接入配置、日志和受保护的媒体资源。合成 SIP REGISTER 在摘要认证后返回 200。此次切换后，正式平台的注册请求收到 403，需同步该条级联的 SIP 认证密码后复测。
 
-从 Mac 向公网 IP 的 TCP 和 UDP 5060 发送合成 SIP REGISTER，两种协议均返回预期国标域的 401 Digest 挑战。ZLMediaKit 在先前的内部检查中分配了位于规定范围的本机 RTP/RTCP UDP 配对端口。真实摄像头、天影云级联和长时播放待实测。
+从 Mac 向公网 IP 的 TCP 和 UDP 5060 发送合成 SIP REGISTER，两种协议均返回预期国标域的 401 Digest 挑战。ZLMediaKit 在先前的内部检查中分配了位于规定范围的本机 RTP/RTCP UDP 配对端口。天影云级联和长时播放待实测。
 
 正式平台已注册并同步 3 个通道。原点播收到 SIP 200 OK，测试服通告的收流地址为 `127.0.0.1`。2026-11-06 用户添加腾讯云 TCP 规则后，复测通道尾号 `0001`。正式平台连接测试服公网动态端口，WVP 点播 API 成功，ZLMediaKit 报告 H.265 视频轨道就绪，测试域名 HTTPS 返回有效 FLV 数据。
 
