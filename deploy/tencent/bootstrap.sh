@@ -49,19 +49,13 @@ redis_password=$(openssl rand -hex 32)
 media_secret=$(openssl rand -hex 24)
 sip_password=$(openssl rand -hex 24)
 app_password=$(openssl rand -hex 24)
-edge_password=$(openssl rand -hex 24)
 app_hash=$(printf '%s' "$app_password" | md5sum | cut -d' ' -f1)
 push_key=$(openssl rand -hex 16)
 
 cat > "$config/access.env" <<EOF
 WVP_USERNAME=admin
 WVP_PASSWORD=$app_password
-EDGE_USERNAME=wvp-test
-EDGE_PASSWORD=$edge_password
 EOF
-printf 'wvp-test %s\n' "$(printf '%s\n' "$edge_password" | caddy hash-password)" > "$config/caddy-auth.caddy"
-chgrp caddy "$config/caddy-auth.caddy"
-chmod 0640 "$config/caddy-auth.caddy"
 
 cat > "$config/mysql-admin.cnf" <<EOF
 [client]

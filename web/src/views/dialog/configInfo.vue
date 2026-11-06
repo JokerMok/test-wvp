@@ -53,7 +53,6 @@ export default {
   created() {},
   methods: {
     openDialog: function(data, key) {
-      console.log(data)
       this.showDialog = true
       this.key = key
       this.configInfoData = data

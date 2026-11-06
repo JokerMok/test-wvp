@@ -1,7 +1,4 @@
 wvp.shizibandu.icu {
-	basic_auth {
-		import /srv/apps/test-wvp/shared/config/caddy-auth.caddy
-	}
 	header {
 		Cache-Control "private, no-store"
 		X-Content-Type-Options "nosniff"

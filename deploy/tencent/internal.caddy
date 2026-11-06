@@ -1,3 +1,18 @@
+(test_wvp_media_auth) {
+	@use_wvp_cookie {
+		method GET HEAD
+		not header access-token *
+	}
+	request_header @use_wvp_cookie access-token {http.request.cookie.wvp_token}
+	forward_auth 127.0.0.1:18978 {
+		uri /api/server/version
+		header_up -Authorization
+		header_up -Connection
+		header_up -Upgrade
+		header_up -Sec-WebSocket-Protocol
+	}
+}
+
 (test_wvp_routes) {
 	route {
 		header Content-Security-Policy "connect-src 'self' blob: wss://wvp.shizibandu.icu"
@@ -22,14 +37,27 @@
 		@private path /index /index/* /actuator /actuator/* /doc.html /swagger* /v3/api-docs* /webjars/* /api/server/config /api/emit /api/log /api/log/* /channel/log /channel/log/*
 		respond @private 404
 
-		@wvp path /api/* /record_proxy/*
+		@media_api path /record_proxy/* /api/device/query/snap/* /api/alarm/snap/* /api/jt1078/playback/download /api/jt1078/snap
+		route @media_api {
+			import test_wvp_media_auth
+			reverse_proxy 127.0.0.1:18978 {
+				header_up -Authorization
+			}
+		}
+
+		@wvp path /api/*
 		reverse_proxy @wvp 127.0.0.1:18978 {
 			header_up -Authorization
 		}
 
 		@playback path_regexp wvp_playback ^/(?:[^/]+/[^/]+\.live\.(?:flv|mp4|ts)|[^/]+/[^/]+/[^/]+\.m3u8|[^/]+/[^/]+/[^/]+\.(?:ts|m4s)|mp4_record/.*\.mp4)$
-		reverse_proxy @playback 127.0.0.1:18980 {
-			header_up -Authorization
+		route @playback {
+			import test_wvp_media_auth
+			reverse_proxy 127.0.0.1:18980 {
+				header_up -Authorization
+				header_up -access-token
+				header_up -Cookie
+			}
 		}
 
 		root * /srv/apps/test-wvp/current/site

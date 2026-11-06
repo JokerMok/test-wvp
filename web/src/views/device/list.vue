@@ -360,11 +360,16 @@ export default {
       })
     },
     showInfo: function() {
-      this.$store.dispatch('server/getSystemConfig')
-        .then((data) => {
-          this.serverId = data.addOn.serverId
-          this.$refs.configInfo.openDialog(data)
+      Promise.all([
+        this.$store.dispatch('server/getSystemConfig'),
+        this.$store.dispatch('platform/getServerConfig')
+      ]).then(([data, platformConfig]) => {
+        this.serverId = data.addOn.serverId
+        this.$refs.configInfo.openDialog({
+          ...data,
+          sip: { ...data.sip, password: platformConfig.password }
         })
+      })
     },
 
     subscribeForCatalog: function(data, value) {

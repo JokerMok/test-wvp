@@ -14,10 +14,15 @@ free_space_check() {
     (( available >= 2147483648 )) || { echo "The existing backup job requires 2 GiB free." >&2; return 1; }
 }
 
+backend_sha() {
+    jq -er '(.backend_git_sha // .git_sha) | select(type == "string" and test("^[0-9a-f]{40}$"))' "$1/RELEASE.json"
+}
+
 verify_release() {
     local path=$1
     [[ -d $path && -s $path/wvp.jar && -f $path/site/index.html ]]
     jq -e --arg sha "${path##*/}" '.git_sha == $sha' "$path/RELEASE.json" >/dev/null
+    backend_sha "$path" >/dev/null
     (cd "$path" && sha256sum --quiet -c SHA256SUMS)
 }
 
@@ -28,7 +33,8 @@ set_link() {
 }
 
 wait_for_wvp() {
-    local version=$1
+    local version
+    version=$(backend_sha "$root/releases/$1")
     for attempt in {1..24}; do
         if python3 "$root/deploy/verify.py" http://127.0.0.1:18978 "$version" > /run/test-wvp-verify.log 2>&1; then
             cat /run/test-wvp-verify.log
@@ -83,6 +89,12 @@ case "$action" in
             chmod -R a+rX "$stage"
             chmod 0755 "$stage"
             jq -e --arg sha "$version" '.git_sha == $sha' "$stage/RELEASE.json" >/dev/null
+            if [[ ! -e $stage/wvp.jar && ! -L $stage/wvp.jar ]]; then
+                base=$(readlink -e "$root/current")
+                [[ $(backend_sha "$base") == "$(backend_sha "$stage")" ]] ||
+                    { echo "Frontend package requires a different backend release." >&2; exit 1; }
+                ln -- "$base/wvp.jar" "$stage/wvp.jar"
+            fi
             (cd "$stage" && sha256sum --quiet -c SHA256SUMS)
             free_space_check
             mv -T -- "$stage" "$release"
