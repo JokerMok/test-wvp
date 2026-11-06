@@ -2,7 +2,7 @@
 
 ## 当前部署
 
-- 2026-11-06 在 `tencent-main` 完成内部部署。应用版本为 `2.7.4`，运行提交为 `d1da553757764c5a5326c5eab3dd5a824de02977`，已核对运行 API、发布清单与 GitHub 提交。[私有仓库](https://github.com/JokerMok/test-wvp)
+- 2026-11-06 在 `tencent-main` 完成部署和公网接入。应用版本为 `2.7.4`，运行提交为 `d1da553757764c5a5326c5eab3dd5a824de02977`，已核对运行 API、发布清单与 GitHub 提交。[私有仓库](https://github.com/JokerMok/test-wvp)
 - 源码以正式环境归档为基线，纳入 2026-11-05 的 UDP 修订。测试环境使用独立空库和新生成的凭证。来源及原归档校验值见 `SOURCE.md`。
 - 发布包 SHA-256 为 `5a8b9af78919c95b497455fd8fb2517a3d8e50e3ca4dfa4ccf17f38fbb1ef9da`，原件留在 Mac 项目的 `releases/` 下。服务器以 `current/RELEASE.json` 标识版本，`current/SHA256SUMS` 覆盖 JAR、数据库初始化 SQL 和正式静态文件。JAR SHA-256 为 `27db37756e127dd431e6e5ff40472e46cc1c8c96cea010a248a775a555dd1cb3`。
 - 项目目录为 `/srv/apps/test-wvp`。`test-wvp{,-db,-cache,-media}.service` 均已启动并启用开机自启。WVP 使用宿主 Java 21，MySQL 8.4.11 与 Redis 8.0.5 为独立实例。ZLMediaKit 使用官方 `linux/amd64` 镜像 `sha256:f0022a9ebe3085f2710a5a9312975564f22a8c8449be88217b55ce7e3cf9539b` 的校验后运行文件，来源为腾讯云镜像端点。
@@ -16,15 +16,17 @@
 
 ## 访问
 
-在 Mac 保持下列 SSH 隧道，再打开 [内部测试入口](http://127.0.0.1:28083/)。平台账号存放于服务器 `shared/config/access.env`，仅 root 可读。
+打开 [公网测试入口](https://wvp.shizibandu.icu/)，先通过 Caddy 入口认证，再登录 WVP。两组凭证存放于服务器 `/srv/apps/test-wvp/shared/config/access.env`，仅 root 可读。
+
+用户在腾讯云控制台添加了 `wvp A 175.178.236.56`（默认线路，TTL 600 秒），并确认主域名的腾讯云备案接入正常。两台 DNSPod 权威服务器返回一致。Mac 实测 HTTP 308 跳转到 HTTPS，Let's Encrypt 证书受信任，有效期至 2027-02-04。
+
+SSH 隧道可用于内部访问。建立隧道后打开 [内部测试入口](http://127.0.0.1:28083/)。
 
 ```sh
 ssh -N -L 127.0.0.1:28083:127.0.0.1:18083 tencent-main
 ```
 
-公网目标为 `https://wvp.shizibandu.icu/`。DNSPod 两台权威服务器对 `wvp` 返回 NXDOMAIN。需新增主机记录 `wvp`，类型 `A`，值 `175.178.236.56`，默认线路，TTL 600 秒。2026-10-20 的服务器记录显示主域名已接入腾讯云备案，本轮控制台会话未能复核当前状态。[腾讯云备案接入说明](https://cloud.tencent.com/document/product/243/97669)
-
-公网候选 `/srv/apps/test-wvp/deploy/site-public.caddy` 已通过校验。权威解析生效并核对备案接入后，在服务器执行 `sudo /srv/apps/test-wvp/deploy/enable-entry.sh public`，然后从外部核对 HTTP 308、标准 TLS 与实际站点。公网入口需先通过 Caddy 测试账号认证，再登录 WVP。前端和 API 同源，浏览器媒体链接配置为该域名的 HTTPS/WSS。设备 SIP、RTP、管理端口均为本机访问。
+切换公网入口用 `sudo /srv/apps/test-wvp/deploy/enable-entry.sh public`，切回仅内部访问用 `sudo /srv/apps/test-wvp/deploy/enable-entry.sh internal`。本次启用前的内部配置备份为 `/srv/ops/rollback/caddy/test-wvp.FREfV1VY`。设备 SIP、RTP 和管理端口均限本机访问。
 
 ## 更新与回退
 
@@ -51,4 +53,6 @@ ssh tencent-main "sudo /srv/apps/test-wvp/deploy/manage.sh install $sha" < "$pac
 
 服务器和内部 Caddy 入口已验证登录、版本 API、国标设备列表、媒体节点在线、敏感管理路由拦截。Chrome 经 SSH 隧道完成表单登录并显示空设备表，WVP API 保持同源，Caddy 的内容安全策略拦截了播放器统计请求。快速离开仪表盘时，未返回的图表请求可触发 `setData` 异常，设备页和查询 API 仍正常。
 
-合成 SIP REGISTER 收到 401 Digest 挑战，ZLMediaKit 分配了位于规定范围的本机 RTP/RTCP UDP 配对端口。真实摄像头、天影云级联和长时播放待实测，公网 DNS 与 HTTPS 待接入。
+公网 Chrome 已通过入口认证和 WVP 登录，登录 API 请求保持同源。公网 API 实测返回当前版本，国标设备列表为空，媒体节点在线。
+
+合成 SIP REGISTER 收到 401 Digest 挑战，ZLMediaKit 分配了位于规定范围的本机 RTP/RTCP UDP 配对端口。真实摄像头、天影云级联和长时播放待实测。
