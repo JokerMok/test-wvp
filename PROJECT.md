@@ -10,7 +10,7 @@
 | 组件 | 服务器地址 |
 | --- | --- |
 | Caddy 内部入口 | `127.0.0.1:18083` |
-| WVP HTTP 与 SIP | `127.0.0.1:18978`，`127.0.0.1:18982` TCP/UDP |
+| WVP HTTP 与 SIP | `127.0.0.1:18978`，`127.0.0.1:5060` TCP/UDP |
 | MySQL 与 Redis | `127.0.0.1:18979`，`127.0.0.1:18977` |
 | ZLMediaKit | `127.0.0.1:18980` HTTP，`18983` RTMP，`18984` RTSP，`18985` RTP。国标 UDP 收流范围 `30000–30500`，配对 RTCP 最多到 `30501` |
 
@@ -27,6 +27,10 @@ ssh -N -L 127.0.0.1:28083:127.0.0.1:18083 tencent-main
 ```
 
 切换公网入口用 `sudo /srv/apps/test-wvp/deploy/enable-entry.sh public`，切回仅内部访问用 `sudo /srv/apps/test-wvp/deploy/enable-entry.sh internal`。本次启用前的内部配置备份为 `/srv/ops/rollback/caddy/test-wvp.FREfV1VY`。设备 SIP、RTP 和管理端口均限本机访问。
+
+2026-11-06 对齐了测试机的国标配置。编号、域和端口取自线上包 `docker/.env` 的 `SIP_Id`、`SIP_Domain`、`SIP_Port`，注册参数取自 `docker/wvp/wvp/application-docker.yml`。生效配置保存在服务器 `shared/config/application.yml`。接入信息显示实际监听地址 `127.0.0.1:5060`，页面隐藏已设置的测试 SIP 密码。
+
+修改这组配置后只需重启 `test-wvp.service`。如需恢复修改前的 SIP 配置，用 `sudo install -o root -g test-wvp -m 0640 /srv/apps/test-wvp/shared/backups/sip-align-20261106T020807Z/application.yml /srv/apps/test-wvp/shared/config/application.yml` 恢复文件，再执行 `sudo systemctl restart test-wvp.service`。
 
 ## 更新与回退
 
@@ -55,4 +59,4 @@ ssh tencent-main "sudo /srv/apps/test-wvp/deploy/manage.sh install $sha" < "$pac
 
 公网 Chrome 已通过入口认证和 WVP 登录，登录 API 请求保持同源。公网 API 实测返回当前版本，国标设备列表为空，媒体节点在线。
 
-合成 SIP REGISTER 收到 401 Digest 挑战，ZLMediaKit 分配了位于规定范围的本机 RTP/RTCP UDP 配对端口。真实摄像头、天影云级联和长时播放待实测。
+合成 SIP REGISTER 在本机 5060 端口收到与线上包国标域一致的 401 Digest 挑战。ZLMediaKit 在先前的内部检查中分配了位于规定范围的本机 RTP/RTCP UDP 配对端口。真实摄像头、天影云级联和长时播放待实测。
