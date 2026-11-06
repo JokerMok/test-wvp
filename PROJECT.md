@@ -92,6 +92,8 @@ sudo systemctl restart test-wvp-media.service test-wvp.service
 
 实测测试站点直接点播时收到来自该 IP 的 RTP，ZLMediaKit 识别出 H.265 视频。Mac 通过测试域名拉取 HTTPS-FLV，识别到 `2560×1440` 的视频轨道。此轮验证覆盖摄像机到测试服的 UDP 直连和测试域名的视频出口。
 
+同日 14:46，用户从正式 WVP 点播测试服共享的通道 `0004`，确认看到画面。按本次 SIP 协商的 SSRC 统计，测试服在 UDP 30008 收到 3310 个摄像机 RTP 包，并从 UDP 30502 向正式平台 UDP 30128 发送了 2899 个 RTP 包。正式平台返回 4 个 RTCP 接收报告，ZLMediaKit 识别到 H.265 2560×1440、15 FPS。验收覆盖这一路约 48 秒的级联媒体抓包。
+
 ## 更新与回退
 
 Mac 使用 Git 2.17 以上、JDK 21、Maven 3.9、Node.js 和 Python 3.11 以上。本次使用 Maven 3.9.9、Node.js 25.9.0 和 npm 11.12.1。进入本仓库后，构建脚本从 GitHub `main` 可达的指定提交建包，并使用前端锁文件。
