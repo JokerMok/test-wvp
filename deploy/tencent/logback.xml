@@ -1,10 +1,37 @@
 <configuration>
+    <property name="LOG_DIR" value="/srv/apps/test-wvp/shared/data/wvp/logs"/>
+    <property name="PAGE_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS,Asia/Shanghai} %-5level %logger{40} - %msg%n"/>
+
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <pattern>%level %logger{40} - %msg%n</pattern>
         </encoder>
     </appender>
+
+    <appender name="RollingFile" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/wvp-%d{yyyy-MM-dd,Asia/Shanghai}.%i.log</fileNamePattern>
+            <maxFileSize>8MB</maxFileSize>
+            <maxHistory>7</maxHistory>
+            <totalSizeCap>32MB</totalSizeCap>
+            <cleanHistoryOnStart>true</cleanHistoryOnStart>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${PAGE_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <appender name="WebLog" class="com.genersoft.iot.vmp.conf.webLog.WebSocketAppender">
+        <encoder>
+            <pattern>${PAGE_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="RollingFile"/>
+        <appender-ref ref="WebLog"/>
     </root>
 </configuration>

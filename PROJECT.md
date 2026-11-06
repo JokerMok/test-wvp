@@ -89,8 +89,12 @@ ssh tencent-main "sudo /srv/apps/test-wvp/deploy/manage.sh install $sha" < "$pac
 
 ## 数据和备份
 
-- `shared/config` 保存应用、MySQL、Redis、媒体、入口认证与 JWK，`shared/data` 保存 MySQL、Redis 和服务运行数据，`shared/uploads` 保存快照和录像。Java 日志由 journald 管理，媒体日志在 `shared/data/media/logs`。
+- `shared/config` 保存应用、MySQL、Redis、媒体、入口认证与 JWK，`shared/data` 保存 MySQL、Redis 和服务运行数据，`shared/uploads` 保存快照和录像。WVP 同时写入 journald 和 `shared/data/wvp/logs`。历史文件最多保留 7 天，滚动文件总量上限 32 MB。媒体日志在 `shared/data/media/logs`。
 - `/etc/server-ops/backup.d/test-wvp.sh` 已接入现有 `server-config-backup.timer`。钩子使用 MySQL `mysqldump --single-transaction`、Redis RDB 快照以及上传目录归档。此次单独执行钩子，通过校验及隔离 MySQL 恢复，恢复库含 22 张 InnoDB 表与 1 个测试账号。验证备份位于 `shared/backups/verify-20261106.ZsyR5mRH/test-wvp`。定时任务下次运行会纳入项目钩子。
+
+运维中心的历史日志由 `deploy/tencent/logback.xml` 的 `RollingFile` 提供，实时日志使用同一配置的 `WebLog` 推送。Caddy 只代理日志列表、合法文件名的读取和 `/channel/log` WebSocket 握手。公网仍要求 Caddy 入口认证和 WVP 登录。2026-11-06 从 journald 补入 1,313 条既有 WVP 记录。已验证公网历史列表、文件预览与下载、实时日志帧，以及未登录的拒绝响应。
+
+日志配置回退文件在 `/srv/apps/test-wvp/shared/backups/log-module-20261106T042838Z/`。将其中的 `logback.xml` 和 `internal.caddy` 恢复到服务器项目的 `deploy/`，用 `deploy/enable-entry.sh public` 重载当前公网入口，再重启 `test-wvp.service`。已生成的历史文件保留在数据目录。
 
 ## 定向验证
 

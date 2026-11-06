@@ -2,7 +2,24 @@
 	route {
 		header Content-Security-Policy "connect-src 'self' blob: wss://wvp.shizibandu.icu"
 
-		@private path /index /index/* /actuator /actuator/* /doc.html /swagger* /v3/api-docs* /webjars/* /api/server/config /api/emit /api/log/* /channel/log
+		@log_files {
+			method GET
+			path_regexp wvp_log_file ^/api/log/(list|file/wvp-[0-9]{4}-[0-9]{2}-[0-9]{2}\.[0-9]+\.log)$
+		}
+		reverse_proxy @log_files 127.0.0.1:18978 {
+			header_up -Authorization
+		}
+
+		@log_stream {
+			method GET
+			path /channel/log
+			header_regexp wvp_log_upgrade Upgrade (?i)^websocket$
+		}
+		reverse_proxy @log_stream 127.0.0.1:18978 {
+			header_up -Authorization
+		}
+
+		@private path /index /index/* /actuator /actuator/* /doc.html /swagger* /v3/api-docs* /webjars/* /api/server/config /api/emit /api/log /api/log/* /channel/log /channel/log/*
 		respond @private 404
 
 		@wvp path /api/* /record_proxy/*
