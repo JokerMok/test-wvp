@@ -41,3 +41,12 @@ http://127.0.0.1:18083 {
 	bind 127.0.0.1
 	import test_wvp_routes
 }
+
+http://127.0.0.1:18981 {
+	bind 127.0.0.1
+	route {
+		# Bind only the dynamic RTP/RTCP sockets to the instance's private interface.
+		uri /index/api/openRtpServer query local_ip 10.1.0.12
+		reverse_proxy 127.0.0.1:18980
+	}
+}

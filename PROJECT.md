@@ -47,29 +47,35 @@ sudo systemctl restart test-wvp.service
 
 ## 正式平台级联收流
 
-测试服使用 TCP 被动模式。点播时向正式平台通告 `175.178.236.56` 和从 `30000–30039` 分配的动态端口。主机 UFW 仅允许来源 `47.106.174.114/32` 访问这段 TCP 端口。腾讯云轻量实例防火墙也需要允许同一来源和端口范围。
+测试服支持 UDP 和 TCP 被动收流。点播时向正式平台通告 `175.178.236.56`，从 `30000–30039` 分配媒体端口，UDP 的 RTP 和 RTCP 使用一对相邻端口。主机 UFW 仅允许来源 `47.106.174.114/32` 访问这段 TCP、UDP 端口。腾讯云实例防火墙需允许同一来源及端口范围。
 
-在 `shared/config/application.yml` 设置 `media.sdp-ip` 为公网 IP、`media.rtp.port-range` 为 `30000,30039`，并在 `shared/config/media/config.ini` 的 `[rtp_proxy]` 设置 `port_range=30000-30039`。将 `deploy/tencent/systemd/test-wvp-rtp@.socket` 和 `test-wvp-rtp@.service` 安装到 `/etc/systemd/system/`，执行 `systemctl daemon-reload`，启用 `test-wvp-rtp@30000.socket` 至 `test-wvp-rtp@30038.socket` 中的偶数端口。转发服务在有连接时启动，将 TCP 流量转发到 ZLMediaKit 的同端口回环监听。主机规则如下。
-
-```sh
-sudo ufw allow in on eth0 from 47.106.174.114 to 10.1.0.12 port 30000:30039 proto tcp comment 'test-wvp cascade RTP TCP'
-sudo systemctl restart test-wvp-media.service test-wvp.service
-```
-
-回退时先删除相应的腾讯云防火墙规则，再在服务器执行以下命令。应用和媒体服务需要联合重启。
+在 `shared/config/application.yml` 设置 `media.sdp-ip` 为公网 IP、`media.rtp.port-range` 为 `30000,30039`、`media.http-port` 为 `18981`。在 `shared/config/media/config.ini` 的 `[rtp_proxy]` 设置 `port_range=30000-30039`。将仓库的 `deploy/tencent/internal.caddy` 同步到服务器项目的 `deploy/internal.caddy`。Caddy 的本机入口 `127.0.0.1:18981` 将媒体 API 代理到 `127.0.0.1:18980`，为创建媒体端口的请求指定网卡地址 `10.1.0.12`。ZLMediaKit 在该地址直接接收 RTP 和发送 RTCP。把 `deploy/tencent/systemd/test-wvp-media.service.d/10-cascade-rtp.conf` 安装到同名的 `/etc/systemd/system/` 子目录，允许该媒体服务与正式平台通信。旧 TCP 转发 socket 已停用，因为媒体服务会在同一网卡上直接监听。
 
 ```bash
-sudo ufw delete allow in on eth0 from 47.106.174.114 to 10.1.0.12 port 30000:30039 proto tcp
-sudo systemctl disable --now test-wvp-rtp@{30000..30038..2}.socket
-sudo systemctl stop 'test-wvp-rtp@*.service'
-sudo rm /etc/systemd/system/test-wvp-rtp@.socket /etc/systemd/system/test-wvp-rtp@.service
+sudo ufw allow in on eth0 from 47.106.174.114 to 10.1.0.12 port 30000:30039 proto tcp comment 'test-wvp cascade RTP TCP'
+sudo ufw allow in on eth0 from 47.106.174.114 to 10.1.0.12 port 30000:30039 proto udp comment 'test-wvp cascade RTP UDP'
 sudo systemctl daemon-reload
-app=/srv/apps/test-wvp
-backup=$app/shared/backups/rtp-cascade-20261106T040431Z
-sudo cp -a "$backup/application.yml" "$app/shared/config/application.yml"
-sudo cp -a "$backup/media-config.ini" "$app/shared/config/media/config.ini"
+sudo /srv/apps/test-wvp/deploy/enable-entry.sh public
 sudo systemctl restart test-wvp-media.service test-wvp.service
 ```
+
+如需切回此前的 TCP 转发配置，先将设备的收流模式设为 TCP 被动，再在服务器执行以下命令。媒体进程退出后才能重新启用占用同一端口的 TCP 转发。
+
+```bash
+app=/srv/apps/test-wvp
+backup=$app/shared/backups/rtp-udp-20261106T044127Z
+sudo systemctl stop test-wvp.service test-wvp-media.service
+sudo cp -a "$backup/application.yml" "$app/shared/config/application.yml"
+sudo cp -a "$backup/internal.caddy" "$app/deploy/internal.caddy"
+sudo unlink /etc/systemd/system/test-wvp-media.service.d/10-cascade-rtp.conf
+sudo ufw delete allow in on eth0 from 47.106.174.114 to 10.1.0.12 port 30000:30039 proto udp
+sudo systemctl daemon-reload
+sudo systemctl enable --now test-wvp-rtp@{30000..30038..2}.socket
+sudo "$app/deploy/enable-entry.sh" public
+sudo systemctl start test-wvp-media.service test-wvp.service
+```
+
+如需完全关闭级联媒体入口，再停用这些 TCP 转发 socket，并删除主机与云防火墙中该来源的媒体端口规则。
 
 ## 更新与回退
 
@@ -105,5 +111,7 @@ ssh tencent-main "sudo /srv/apps/test-wvp/deploy/manage.sh install $sha" < "$pac
 从 Mac 向公网 IP 的 TCP 和 UDP 5060 发送合成 SIP REGISTER，两种协议均返回预期国标域的 401 Digest 挑战。ZLMediaKit 在先前的内部检查中分配了位于规定范围的本机 RTP/RTCP UDP 配对端口。真实摄像头、天影云级联和长时播放待实测。
 
 正式平台已注册并同步 3 个通道。原点播收到 SIP 200 OK，测试服通告的收流地址为 `127.0.0.1`。2026-11-06 用户添加腾讯云 TCP 规则后，复测通道尾号 `0001`。正式平台连接测试服公网动态端口，WVP 点播 API 成功，ZLMediaKit 报告 H.265 视频轨道就绪，测试域名 HTTPS 返回有效 FLV 数据。
+
+同日 12:43，在媒体服务直接监听网卡后，同一通道用 UDP 和 TCP 被动分别点播，均收到 H.265，公网 HTTPS-FLV 均通过。UDP 抓包见来自正式平台的 321 个 RTP 包和测试服发出的 1 个 RTCP RR。复测后恢复设备为 UDP。
 
 点播修复前的 SIP 抓包另见正式平台在测试服回复心跳 200 OK 后发送注销，20 秒后重新注册。需要正式平台日志确认触发原因。验收范围为一路短时点播。
