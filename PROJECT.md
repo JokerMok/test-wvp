@@ -28,9 +28,9 @@ ssh -N -L 127.0.0.1:28083:127.0.0.1:18083 tencent-main
 
 切换公网入口用 `sudo /srv/apps/test-wvp/deploy/enable-entry.sh public`，切回仅内部访问用 `sudo /srv/apps/test-wvp/deploy/enable-entry.sh internal`。本次启用前的内部配置备份为 `/srv/ops/rollback/caddy/test-wvp.FREfV1VY`。设备 SIP、RTP 和管理端口均限本机访问。
 
-2026-11-06 对齐了测试机的国标配置。编号、域和端口取自线上包 `docker/.env` 的 `SIP_Id`、`SIP_Domain`、`SIP_Port`，注册参数取自 `docker/wvp/wvp/application-docker.yml`。生效配置保存在服务器 `shared/config/application.yml`。接入信息显示实际监听地址 `127.0.0.1:5060`，页面隐藏已设置的测试 SIP 密码。
+国标域和端口沿用线上包 `docker/.env` 的 `SIP_Domain` 和 `SIP_Port`，注册参数取自 `docker/wvp/wvp/application-docker.yml`。测试编号按用户指定配置。生效配置保存在服务器 `shared/config/application.yml`。接入信息显示腾讯云公网 IP `175.178.236.56`，SIP 实际监听 `127.0.0.1:5060`（TCP/UDP）。页面隐藏已设置的测试 SIP 密码。
 
-修改这组配置后只需重启 `test-wvp.service`。如需恢复修改前的 SIP 配置，用 `sudo install -o root -g test-wvp -m 0640 /srv/apps/test-wvp/shared/backups/sip-align-20261106T020807Z/application.yml /srv/apps/test-wvp/shared/config/application.yml` 恢复文件，再执行 `sudo systemctl restart test-wvp.service`。
+修改这组配置后只需重启 `test-wvp.service`。如需回退本次编号和显示地址的修改，用 `sudo install -o root -g test-wvp -m 0640 /srv/apps/test-wvp/shared/backups/sip-identity-20261106T022552Z/application.yml /srv/apps/test-wvp/shared/config/application.yml` 恢复文件，再执行 `sudo systemctl restart test-wvp.service`。
 
 ## 更新与回退
 
