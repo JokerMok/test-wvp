@@ -1,5 +1,7 @@
 (test_wvp_routes) {
 	route {
+		header Content-Security-Policy "connect-src 'self' blob: wss://wvp.shizibandu.icu"
+
 		@private path /index /index/* /actuator /actuator/* /doc.html /swagger* /v3/api-docs* /webjars/* /api/server/config /api/emit /api/log/* /channel/log
 		respond @private 404
 
@@ -19,5 +21,6 @@
 }
 
 http://127.0.0.1:18083 {
+	bind 127.0.0.1
 	import test_wvp_routes
 }
