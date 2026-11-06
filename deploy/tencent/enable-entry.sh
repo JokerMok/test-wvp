@@ -17,4 +17,4 @@ envfiles=()
 while IFS= read -r path; do
     [[ -z $path ]] || envfiles+=(-p "EnvironmentFile=$path")
 done < <(systemctl show caddy -p EnvironmentFiles | awk '{sub(/^EnvironmentFiles=/, ""); print $1}')
-systemd-run --wait --pipe --collect "{envfiles[@]}" /usr/local/sbin/caddy-site-install test-wvp "$candidate"
+systemd-run --wait --pipe --collect "${envfiles[@]}" /usr/local/sbin/caddy-site-install test-wvp "$candidate"

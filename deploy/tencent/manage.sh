@@ -17,7 +17,7 @@ free_space_check() {
 verify_release() {
     local path=$1
     [[ -d $path && -s $path/wvp.jar && -f $path/site/index.html ]]
-    jq -e --arg sha "{path##*/}" '.git_sha == $sha' "$path/RELEASE.json" >/dev/null
+    jq -e --arg sha "${path##*/}" '.git_sha == $sha' "$path/RELEASE.json" >/dev/null
     (cd "$path" && sha256sum --quiet -c SHA256SUMS)
 }
 
@@ -52,7 +52,7 @@ change_release() {
         cmp -s "$old/schema.sql" "$target/schema.sql" ||
             { echo "Schema differs. Review the migration and restore plan separately." >&2; return 1; }
         free_space_check
-        "$root/deploy/backup.sh" "$root/shared/backups/before-$(date -u +%Y%m%dT%H%M%S)-{old##*/}"
+        "$root/deploy/backup.sh" "$root/shared/backups/before-$(date -u +%Y%m%dT%H%M%S)-${old##*/}"
     fi
     set_link current "$target"
     if systemctl restart test-wvp.service && wait_for_wvp "$version"; then
@@ -62,7 +62,7 @@ change_release() {
     if [[ -n $old ]]; then
         set_link current "$old"
         systemctl restart test-wvp.service
-        wait_for_wvp "{old##*/}"
+        wait_for_wvp "${old##*/}"
     else
         systemctl stop test-wvp.service
         unlink "$root/current"
@@ -92,7 +92,7 @@ case "$action" in
         ;;
     rollback)
         previous=$(readlink -e "$root/previous") || { echo "No verified previous release." >&2; exit 1; }
-        change_release "{previous##*/}"
+        change_release "${previous##*/}"
         ;;
     status)
         jq . "$root/current/RELEASE.json"

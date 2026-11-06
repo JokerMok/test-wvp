@@ -1,16 +1,21 @@
 [Unit]
 Description=Test WVP ZLMediaKit node
 After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=4
 
 [Service]
 User=test-wvp-media
 Group=test-wvp-media
 WorkingDirectory=/srv/apps/test-wvp/shared/data/media
 Environment=LD_LIBRARY_PATH=/srv/apps/test-wvp/runtime/zlm
-ExecStart=/srv/apps/test-wvp/runtime/zlm/MediaServer -c /srv/apps/test-wvp/shared/config/media/config.ini -l 2
+Environment=PYTHONHOME=/srv/apps/test-wvp/runtime/zlm/python
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/srv/apps/test-wvp/runtime/zlm/MediaServer -c /srv/apps/test-wvp/shared/config/media/config.ini -s /srv/apps/test-wvp/shared/config/media/tls -t 2 -l 2 --log-dir /srv/apps/test-wvp/shared/data/media/logs/ --log-slice 2 --log-size 2
 Restart=always
 RestartSec=3
 UMask=0027
+LimitCORE=0
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true

@@ -56,6 +56,6 @@ with (release / 'SHA256SUMS').open('w') as sums:
             sha = hashlib.file_digest(f, 'sha256').hexdigest()
         sums.write(f'{sha}  {item.relative_to(release)}\n')
 PY
-COPYFILE_DISABLE=1 tar -czf "$output" -C "$release" .
+COPYFILE_DISABLE=1 tar --no-xattrs --no-acls -czf "$output" -C "$release" .
 shasum -a 256 "$output"
 printf 'Git commit: %s\nArchive: %s\n' "$version" "$output"

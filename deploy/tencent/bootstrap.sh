@@ -36,6 +36,7 @@ install -d -m 0700 -o test-wvp-db -g test-wvp-db "$shared/data/mysql"
 install -d -m 0700 -o test-wvp-cache -g test-wvp-cache "$shared/data/redis"
 install -d -m 0700 -o test-wvp -g test-wvp "$shared/data/wvp" "$config/wvp" "$shared/uploads/snap"
 install -d -m 0700 -o test-wvp-media -g test-wvp-media "$shared/data/media" "$config/media" "$shared/uploads/mp4_record"
+install -d -m 0700 -o test-wvp-media -g test-wvp-media "$config/media/tls" "$shared/data/media/logs"
 install -d -m 0750 -o test-wvp-media -g test-wvp-media "$shared/data/media/www"
 ln -sfn "$shared/uploads/mp4_record" "$shared/data/media/www/mp4_record"
 ln -sfn "$shared/uploads/snap" "$shared/data/wvp/snap"
@@ -81,6 +82,7 @@ mysqlx=OFF
 skip-log-bin
 skip-name-resolve
 local_infile=OFF
+secure-file-priv=NULL
 innodb_buffer_pool_size=64M
 innodb_redo_log_capacity=16M
 innodb_temp_data_file_path=ibtmp1:12M:autoextend:max:64M
@@ -245,7 +247,7 @@ bootstrap_unit=test-wvp-db-bootstrap.service
 systemd-run --unit="$bootstrap_unit" --collect -p User=test-wvp-db -p Group=test-wvp-db \
     -p RuntimeDirectory=test-wvp-db -p RuntimeDirectoryMode=0700 \
     /usr/sbin/mysqld --defaults-file="$config/mysql.cnf" --skip-networking
-trap 'systemctl stop "$bootstrap_unit"' EXIT
+trap 'systemctl stop "$bootstrap_unit" || true' EXIT
 mysql_socket=(mysql --no-defaults --protocol=socket --socket=/run/test-wvp-db/mysql.sock -u root)
 for attempt in {1..30}; do
     if "${mysql_socket[@]}" --batch --skip-column-names -e 'SELECT 1' >/dev/null 2>&1; then

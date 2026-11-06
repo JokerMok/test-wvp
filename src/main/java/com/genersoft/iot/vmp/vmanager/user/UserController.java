@@ -50,8 +50,7 @@ public class UserController {
     @Autowired
     private PasswordComplexityValidator passwordComplexityValidator;
 
-    @GetMapping("/login")
-    @PostMapping("/login")
+    @RequestMapping(value = "/login", method = {RequestMethod.GET, RequestMethod.POST})
     @Operation(summary = "登录", description = "登录成功后返回AccessToken， 可以从返回值获取到也可以从响应头中获取到，" +
             "后续的请求需要添加请求头 'access-token'或者放在参数里")
     @Parameter(name = "username", description = "用户名", required = true)
