@@ -26,9 +26,15 @@ import com.genersoft.iot.vmp.vmanager.bean.WVPResult;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.ObjectUtils;
 
+import org.springframework.web.util.UriUtils;
+
+import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.*;
 
 @Slf4j
@@ -44,6 +50,9 @@ public class ZLMMediaNodeServerService implements IMediaNodeServerService {
 
     @Autowired
     private UserSetting userSetting;
+
+    @Value("${media.proxy-https-port:0}")
+    private int proxyHttpsPort;
 
     @Autowired
     private HookSubscribe subscribe;
@@ -592,11 +601,23 @@ public class ZLMMediaNodeServerService implements IMediaNodeServerService {
 
     @Override
     public DownloadFileInfo getDownloadFilePath(MediaServer mediaServerItem, RecordInfo recordInfo) {
+        DownloadFileInfo info = new DownloadFileInfo();
+        if (usesHttpsProxy(mediaServerItem)) {
+            if (ObjectUtils.isEmpty(mediaServerItem.getRecordPath()) || ObjectUtils.isEmpty(recordInfo.getFilePath())) {
+                return info;
+            }
+            Path directory = Path.of(mediaServerItem.getRecordPath()).toAbsolutePath().normalize();
+            Path file = Path.of(recordInfo.getFilePath()).toAbsolutePath().normalize();
+            if (file.startsWith(directory) && !file.equals(directory)) {
+                String relative = directory.getFileName() + "/" + directory.relativize(file);
+                info.setHttpsPath(String.format("https://%s:%d/%s?download=1", mediaServerItem.getStreamIp(),
+                        proxyHttpsPort, UriUtils.encodePath(relative.replace(File.separatorChar, '/'), StandardCharsets.UTF_8)));
+            }
+            return info;
+        }
 
         // 将filePath作为独立参数传入，避免%符号解析问题
         String pathTemplate = "%s://%s:%s/index/api/downloadFile?file_path=%s";
-
-        DownloadFileInfo info = new DownloadFileInfo();
 
         // filePath作为第4个参数
         info.setHttpPath(String.format(pathTemplate,
@@ -621,7 +642,8 @@ public class ZLMMediaNodeServerService implements IMediaNodeServerService {
         StreamInfo streamInfoResult = new StreamInfo();
         streamInfoResult.setStream(stream);
         streamInfoResult.setApp(app);
-        if (addr == null) {
+        boolean proxy = usesHttpsProxy(mediaServer);
+        if (addr == null || proxy) {
             addr = mediaServer.getStreamIp();
         }
 
@@ -660,24 +682,27 @@ public class ZLMMediaNodeServerService implements IMediaNodeServerService {
 
         String callIdParam = callIdParamBuilder.toString();
 
-        streamInfoResult.setRtmp(addr, mediaServer.getRtmpPort(),mediaServer.getRtmpSSlPort(), app,  stream, callIdParam);
-        streamInfoResult.setRtsp(addr, mediaServer.getRtspPort(),mediaServer.getRtspSSLPort(), app,  stream, callIdParam);
+        Integer httpPort = proxy ? Integer.valueOf(0) : mediaServer.getHttpPort();
+        Integer httpsPort = proxy ? Integer.valueOf(proxyHttpsPort) : mediaServer.getHttpSSlPort();
+        if (!proxy) {
+            streamInfoResult.setRtmp(addr, mediaServer.getRtmpPort(), mediaServer.getRtmpSSlPort(), app, stream, callIdParam);
+            streamInfoResult.setRtsp(addr, mediaServer.getRtspPort(), mediaServer.getRtspSSLPort(), app, stream, callIdParam);
+            streamInfoResult.setRtc(addr, httpPort, httpsPort, app, stream, callIdParam, isPlay);
+        }
 
         String flvFile = String.format("%s/%s.live.flv%s", app, stream, callIdParam);
-        streamInfoResult.setFlv(addr, mediaServer.getHttpPort(),mediaServer.getHttpSSlPort(), flvFile);
-        streamInfoResult.setWsFlv(addr, mediaServer.getHttpPort(),mediaServer.getHttpSSlPort(), flvFile);
+        streamInfoResult.setFlv(addr, httpPort, httpsPort, flvFile);
+        streamInfoResult.setWsFlv(addr, httpPort, httpsPort, flvFile);
 
         String mp4File = String.format("%s/%s.live.mp4%s", app, stream, callIdParam);
-        streamInfoResult.setFmp4(addr, mediaServer.getHttpPort(),mediaServer.getHttpSSlPort(), mp4File);
-        streamInfoResult.setWsMp4(addr, mediaServer.getHttpPort(),mediaServer.getHttpSSlPort(), mp4File);
+        streamInfoResult.setFmp4(addr, httpPort, httpsPort, mp4File);
+        streamInfoResult.setWsMp4(addr, httpPort, httpsPort, mp4File);
 
-        streamInfoResult.setHls(addr, mediaServer.getHttpPort(), mediaServer.getHttpSSlPort(), app,  stream, callIdParam);
-        streamInfoResult.setWsHls(addr, mediaServer.getHttpPort(), mediaServer.getHttpSSlPort(), app,  stream, callIdParam);
+        streamInfoResult.setHls(addr, httpPort, httpsPort, app,  stream, callIdParam);
+        streamInfoResult.setWsHls(addr, httpPort, httpsPort, app,  stream, callIdParam);
 
-        streamInfoResult.setTs(addr, mediaServer.getHttpPort(), mediaServer.getHttpSSlPort(), app,  stream, callIdParam);
-        streamInfoResult.setWsTs(addr, mediaServer.getHttpPort(), mediaServer.getHttpSSlPort(), app,  stream, callIdParam);
-
-        streamInfoResult.setRtc(addr, mediaServer.getHttpPort(), mediaServer.getHttpSSlPort(), app,  stream, callIdParam, isPlay);
+        streamInfoResult.setTs(addr, httpPort, httpsPort, app,  stream, callIdParam);
+        streamInfoResult.setWsTs(addr, httpPort, httpsPort, app,  stream, callIdParam);
 
         streamInfoResult.setMediaInfo(mediaInfo);
 
@@ -688,5 +713,9 @@ public class ZLMMediaNodeServerService implements IMediaNodeServerService {
             streamInfoResult.setTranscodeStream(transcodeStreamInfo);
         }
         return streamInfoResult;
+    }
+
+    private boolean usesHttpsProxy(MediaServer mediaServer) {
+        return proxyHttpsPort > 0 && mediaServer.isDefaultServer();
     }
 }

@@ -1,0 +1,23 @@
+(test_wvp_routes) {
+	route {
+		@private path /index /index/* /actuator /actuator/* /doc.html /swagger* /v3/api-docs* /webjars/* /api/server/config /api/emit /api/log/* /channel/log
+		respond @private 404
+
+		@wvp path /api/* /record_proxy/*
+		reverse_proxy @wvp 127.0.0.1:18978 {
+			header_up -Authorization
+		}
+
+		@playback path_regexp wvp_playback ^/(?:[^/]+/[^/]+\.live\.(?:flv|mp4|ts)|[^/]+/[^/]+/[^/]+\.m3u8|[^/]+/[^/]+/[^/]+\.(?:ts|m4s)|mp4_record/.*\.mp4)$
+		reverse_proxy @playback 127.0.0.1:18980 {
+			header_up -Authorization
+		}
+
+		root * /srv/apps/test-wvp/current/site
+		file_server
+	}
+}
+
+http://127.0.0.1:18083 {
+	import test_wvp_routes
+}

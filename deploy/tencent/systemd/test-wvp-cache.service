@@ -1,0 +1,23 @@
+[Unit]
+Description=Test WVP Redis
+After=network.target
+
+[Service]
+User=test-wvp-cache
+Group=test-wvp-cache
+ExecStart=/srv/apps/test-wvp/runtime/redis-server /srv/apps/test-wvp/shared/config/redis.conf
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/srv/apps/test-wvp/shared/data/redis
+IPAddressDeny=any
+IPAddressAllow=localhost
+MemoryMax=128M
+CPUQuota=25%
+
+[Install]
+WantedBy=multi-user.target

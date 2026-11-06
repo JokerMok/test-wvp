@@ -1,0 +1,27 @@
+[Unit]
+Description=Test WVP MySQL database
+After=network.target
+
+[Service]
+User=test-wvp-db
+Group=test-wvp-db
+Type=notify
+ExecStart=/usr/sbin/mysqld --defaults-file=/srv/apps/test-wvp/shared/config/mysql.cnf
+RuntimeDirectory=test-wvp-db
+RuntimeDirectoryMode=0750
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=40
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/srv/apps/test-wvp/shared/data/mysql
+IPAddressDeny=any
+IPAddressAllow=localhost
+MemoryMax=512M
+CPUQuota=75%
+
+[Install]
+WantedBy=multi-user.target

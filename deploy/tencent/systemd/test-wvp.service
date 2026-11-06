@@ -1,0 +1,26 @@
+[Unit]
+Description=Test WVP Java application
+After=network.target test-wvp-db.service test-wvp-cache.service test-wvp-media.service
+Requires=test-wvp-db.service test-wvp-cache.service test-wvp-media.service
+
+[Service]
+User=test-wvp
+Group=test-wvp
+WorkingDirectory=/srv/apps/test-wvp/shared/data/wvp
+ExecStart=/usr/bin/java -Xms128m -Xmx384m -XX:ActiveProcessorCount=2 -XX:+ExitOnOutOfMemoryError -Djava.net.preferIPv4Stack=true -jar /srv/apps/test-wvp/current/wvp.jar --spring.config.location=file:/srv/apps/test-wvp/shared/config/application.yml
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=25
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/srv/apps/test-wvp/shared/data/wvp /srv/apps/test-wvp/shared/config/wvp /srv/apps/test-wvp/shared/uploads/snap
+IPAddressDeny=any
+IPAddressAllow=localhost
+MemoryMax=800M
+CPUQuota=100%
+
+[Install]
+WantedBy=multi-user.target

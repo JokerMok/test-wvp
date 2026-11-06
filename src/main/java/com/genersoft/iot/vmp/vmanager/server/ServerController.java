@@ -29,6 +29,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
@@ -198,7 +199,9 @@ public class ServerController {
     public SystemConfigInfo getConfigInfo() {
         SystemConfigInfo systemConfigInfo = new SystemConfigInfo();
         systemConfigInfo.setVersion(versionInfo.getVersion());
-        systemConfigInfo.setSip(sipConfig);
+        SipConfig publicSipConfig = new SipConfig();
+        BeanUtils.copyProperties(sipConfig, publicSipConfig, "password");
+        systemConfigInfo.setSip(publicSipConfig);
         systemConfigInfo.setAddOn(userSetting);
         systemConfigInfo.setServerPort(serverPort);
         systemConfigInfo.setJt1078Config(jt1078Config);

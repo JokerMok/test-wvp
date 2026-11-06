@@ -1,0 +1,25 @@
+[Unit]
+Description=Test WVP ZLMediaKit node
+After=network.target
+
+[Service]
+User=test-wvp-media
+Group=test-wvp-media
+WorkingDirectory=/srv/apps/test-wvp/shared/data/media
+Environment=LD_LIBRARY_PATH=/srv/apps/test-wvp/runtime/zlm
+ExecStart=/srv/apps/test-wvp/runtime/zlm/MediaServer -c /srv/apps/test-wvp/shared/config/media/config.ini -l 2
+Restart=always
+RestartSec=3
+UMask=0027
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/srv/apps/test-wvp/shared/data/media /srv/apps/test-wvp/shared/config/media /srv/apps/test-wvp/shared/uploads
+IPAddressDeny=any
+IPAddressAllow=localhost
+MemoryMax=384M
+CPUQuota=75%
+
+[Install]
+WantedBy=multi-user.target

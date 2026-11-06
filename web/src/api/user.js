@@ -3,8 +3,8 @@ import request from '@/utils/request'
 export function login(params) {
   return request({
     url: '/api/user/login',
-    method: 'get',
-    params: params
+    method: 'post',
+    data: new URLSearchParams(params)
   })
 }
 
