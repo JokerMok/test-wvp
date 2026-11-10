@@ -74,6 +74,18 @@ async function run() {
   check(store.getters.authority === null && !toolbarButton().button, 'profile with incomplete role fails closed')
   commit('SET_AUTHORITY', 0);commit('RESET_STATE')
   check(store.getters.authority === null, 'clearing a login also clears its authority')
+  let lastRequest
+  const apiSource = read('api/autoPlay.js').replace(/^import .*$/gm, '').replace(/^export /gm, '') + '\nmodule.exports = { getAutoPlayTasks, setAutoPlayTasks }'
+  const api = evaluate(apiSource, { request: async options => {
+    lastRequest = options
+    return { code: 0, data: options.method === 'get' ? [{ channelId: 145 }] : { success: true } }
+  } })
+  const tasks = await api.getAutoPlayTasks()
+  check(Array.isArray(tasks) && tasks[0].channelId === 145, 'task list unwraps the actual WVP response envelope')
+  const saved = await api.setAutoPlayTasks([145], false)
+  check(saved.success && lastRequest.data.checkIntervalSeconds === 60, 'saving unwraps the result and keeps the default interval')
+  const denied = evaluate(apiSource, { request: async () => undefined })
+  await assert.rejects(denied.setAutoPlayTasks([145], true));assertions++
   console.log(JSON.stringify({ passed: true, assertions }))
 }
 run().catch(error => { console.error(error); process.exitCode = 1 })
