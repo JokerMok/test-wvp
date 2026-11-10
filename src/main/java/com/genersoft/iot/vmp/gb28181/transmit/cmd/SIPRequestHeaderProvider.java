@@ -337,8 +337,15 @@ public class SIPRequestHeaderProvider {
 	}
 
 	public Request createAckRequest(String localIp, SipURI sipURI, SIPResponse sipResponse) throws ParseException, InvalidArgumentException, PeerUnavailableException {
+		return createDialogRequest(localIp, sipURI, sipResponse, Request.ACK, sipResponse.getCSeqHeader().getSeqNumber());
+	}
 
+	public Request createByeRequest(String localIp, SipURI sipURI, SIPResponse sipResponse) throws ParseException, InvalidArgumentException, PeerUnavailableException {
+		return createDialogRequest(localIp, sipURI, sipResponse, Request.BYE, sipResponse.getCSeqHeader().getSeqNumber() + 1);
+	}
 
+	private Request createDialogRequest(String localIp, SipURI sipURI, SIPResponse sipResponse, String method,
+										long cseq) throws ParseException, InvalidArgumentException, PeerUnavailableException {
 		if(EnvUtil.isDockerEnv()){
 			localIp = sipLayer.getLocalIp(localIp);
 		}
@@ -348,8 +355,7 @@ public class SIPRequestHeaderProvider {
 		viaHeaders.add(viaHeader);
 		viaHeader.setRPort();
 
-		// RFC 3261 12.1.2/12.2.1.1: 2xx ACK uses the dialog remote target and
-		// the reversed Record-Route set, not the media identifier in the SDP.
+		// RFC 3261 12.1.2/12.2.1.1：沿用会话的远端目标和逆序 Record-Route。
 		URI remoteTarget = (URI) sipURI.clone();
 		ContactHeader contact = (ContactHeader) sipResponse.getHeader(ContactHeader.NAME);
 		if (contact != null && !contact.isWildCard() && contact.getAddress().getURI().isSipURI()) {
@@ -387,9 +393,9 @@ public class SIPRequestHeaderProvider {
 		MaxForwardsHeader maxForwards = SipFactory.getInstance().createHeaderFactory().createMaxForwardsHeader(70);
 
 		//ceq
-		CSeqHeader cSeqHeader = SipFactory.getInstance().createHeaderFactory().createCSeqHeader(sipResponse.getCSeqHeader().getSeqNumber(), Request.ACK);
+		CSeqHeader cSeqHeader = SipFactory.getInstance().createHeaderFactory().createCSeqHeader(cseq, method);
 
-		Request request = SipFactory.getInstance().createMessageFactory().createRequest(requestUri, Request.ACK,
+		Request request = SipFactory.getInstance().createMessageFactory().createRequest(requestUri, method,
 				(CallIdHeader) sipResponse.getCallIdHeader().clone(), cSeqHeader,
 				(FromHeader) sipResponse.getFromHeader().clone(), (ToHeader) sipResponse.getToHeader().clone(), viaHeaders, maxForwards);
 		for (Address route : routes) {

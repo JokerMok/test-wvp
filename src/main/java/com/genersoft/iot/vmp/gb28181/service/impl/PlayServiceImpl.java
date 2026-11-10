@@ -27,6 +27,7 @@ import com.genersoft.iot.vmp.media.event.hook.HookType;
 import com.genersoft.iot.vmp.media.event.media.MediaArrivalEvent;
 import com.genersoft.iot.vmp.media.event.media.MediaDepartureEvent;
 import com.genersoft.iot.vmp.media.event.media.MediaNotFoundEvent;
+import com.genersoft.iot.vmp.media.event.media.MediaRtpServerTimeoutEvent;
 import com.genersoft.iot.vmp.media.service.IMediaServerService;
 import com.genersoft.iot.vmp.media.zlm.dto.StreamAuthorityInfo;
 import com.genersoft.iot.vmp.service.ICloudRecordService;
@@ -62,6 +63,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.Vector;
+import java.util.regex.Pattern;
 
 @SuppressWarnings(value = {"rawtypes", "unchecked"})
 @Slf4j
@@ -286,6 +288,57 @@ public class PlayServiceImpl implements IPlayService {
             );
 
             playBack(event.getMediaServer(), device, deviceChannel, startTime, endTime, (code, msg, data) -> {});
+        }
+    }
+
+    @Async
+    @EventListener
+    public void onApplicationEvent(MediaRtpServerTimeoutEvent event) {
+        String streamId = event.getStream();
+        if (!MediaStreamUtil.RTP_APP.equals(event.getApp()) || event.getMediaServer() == null
+                || event.getLocalPort() <= 0 || event.getLocalPort() > 65535
+                || streamId == null || !streamId.matches("[0-9a-fA-F]{8}")) {
+            return;
+        }
+
+        // ZLM 回调使用分配端口时的十六进制 SSRC，点播记录使用通道流 ID。
+        Pattern ssrc = Pattern.compile("0*" + Long.parseLong(streamId, 16));
+        List<SsrcTransaction> matches = sessionManager.getAll().stream()
+                .filter(session -> session != null && session.getType() == InviteSessionType.PLAY
+                        && session.getDeviceId() != null && !Boolean.FALSE.equals(session.getInviteConfirmed()))
+                .filter(session -> event.getApp().equals(session.getApp())
+                        && event.getMediaServer().getId().equals(session.getMediaServerId()))
+                .filter(session -> session.getSsrc() != null && ssrc.matcher(session.getSsrc()).matches())
+                .filter(session -> session.getReceivePort() == null || session.getReceivePort() == event.getLocalPort())
+                .limit(2).toList();
+        if (matches.size() != 1) {
+            return;
+        }
+
+        SsrcTransaction session = matches.getFirst();
+        SipTransactionInfo dialog = session.getSipTransactionInfo();
+        if (ObjectUtils.isEmpty(session.getCallId()) || dialog == null
+                || !session.getCallId().equals(dialog.getCallId())
+                || ObjectUtils.isEmpty(dialog.getFromTag()) || ObjectUtils.isEmpty(dialog.getToTag())) {
+            return;
+        }
+
+        Device device = deviceService.getDeviceByDeviceId(session.getDeviceId());
+        DeviceChannel channel = deviceChannelService.getOneForSourceById(session.getChannelId());
+        if (device == null || channel == null) {
+            return;
+        }
+        try {
+            cmder.streamByeCmd(device, channel.getDeviceId(), session.getApp(), session.getStream(), session.getCallId(),
+                    result -> {
+                        if (result.statusCode >= 200 && result.statusCode < 300) {
+                            log.info("[收流超时] 对端已确认BYE，callId: {}", session.getCallId());
+                        }
+                    });
+        } catch (SsrcTransactionNotFoundException e) {
+            log.debug("[收流超时] 点播会话已结束，callId: {}", session.getCallId());
+        } catch (InvalidArgumentException | SipException | ParseException e) {
+            log.warn("[收流超时] 发送BYE失败，callId: {}", session.getCallId(), e);
         }
     }
 

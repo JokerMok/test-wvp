@@ -25,7 +25,7 @@ public class SipInviteSessionManager {
 	/**
 	 * 添加一个点播/回放的事务信息
 	 */
-	public void put(SsrcTransaction ssrcTransaction){
+	public synchronized void put(SsrcTransaction ssrcTransaction){
 		redisTemplate.opsForHash().put(VideoManagerConstants.SIP_INVITE_SESSION_STREAM + userSetting.getServerId()
 				, ssrcTransaction.getApp() + ssrcTransaction.getStream(), ssrcTransaction);
 
@@ -56,7 +56,7 @@ public class SipInviteSessionManager {
 		return result;
 	}
 	
-	public void removeByStream(String app, String stream) {
+	public synchronized void removeByStream(String app, String stream) {
 		SsrcTransaction ssrcTransaction = getSsrcTransactionByStream(app, stream);
 		if (ssrcTransaction == null ) {
 			return;
@@ -67,14 +67,18 @@ public class SipInviteSessionManager {
 		}
 	}
 
-	public void removeByCallId(String callId) {
+	public synchronized void removeByCallId(String callId) {
 		SsrcTransaction ssrcTransaction = getSsrcTransactionByCallId(callId);
 		if (ssrcTransaction == null ) {
 			return;
 		}
 		redisTemplate.opsForHash().delete(VideoManagerConstants.SIP_INVITE_SESSION_CALL_ID + userSetting.getServerId(), callId);
 		if (ssrcTransaction.getStream() != null) {
-			redisTemplate.opsForHash().delete(VideoManagerConstants.SIP_INVITE_SESSION_STREAM + userSetting.getServerId(), ssrcTransaction.getApp() + ssrcTransaction.getStream());
+			// 同一通道重新点播时，流 ID 可能已经指向新的 Call-ID。
+			SsrcTransaction current = getSsrcTransactionByStream(ssrcTransaction.getApp(), ssrcTransaction.getStream());
+			if (current != null && callId.equals(current.getCallId())) {
+				redisTemplate.opsForHash().delete(VideoManagerConstants.SIP_INVITE_SESSION_STREAM + userSetting.getServerId(), ssrcTransaction.getApp() + ssrcTransaction.getStream());
+			}
 		}
 	}
 

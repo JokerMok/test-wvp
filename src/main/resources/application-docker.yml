@@ -74,6 +74,7 @@ media:
 
 # [根据业务需求配置]
 user-settings:
+    login-timeout: 1440
     # 推流直播是否录制
     record-push-live: true
     auto-apply-play: true

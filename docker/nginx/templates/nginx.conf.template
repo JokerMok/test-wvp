@@ -18,11 +18,18 @@ server {
 		proxy_set_header X-Real-IP $remote_addr;
 		proxy_set_header REMOTE-HOST $remote_addr;
 		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Accept-Encoding "";
         proxy_pass http://polaris-wvp:18978;
 
 
         # 从环境变量获取原始主机地址（x.x.x.x）
         set $original_host ${Stream_IP};
+
+        # 播放地址使用当前网页入口的 /rtp/ 代理，保留 ZLM 的内网 API 端口。
+        sub_filter "http://$original_host:80/rtp/" "http://$http_host/rtp/";
+        sub_filter "http://$original_host/rtp/" "http://$http_host/rtp/";
+        sub_filter "ws://$original_host:80/rtp/" "ws://$http_host/rtp/";
+        sub_filter "ws://$original_host/rtp/" "ws://$http_host/rtp/";
         
         # 执行字符串替换
         # 将媒体资源文件替换为Nginx输出的相对地址

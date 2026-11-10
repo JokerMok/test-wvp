@@ -47,6 +47,14 @@ public class SsrcTransaction {
      */
     private String ssrc;
 
+    // ZLM 收流端口用于区分不同点播的超时回调
+    private Integer receivePort;
+    private Boolean inviteConfirmed;
+
+    // 已建立 UDP 点播的会话内 BYE，保留 INVITE 响应给出的目标和路由
+    private String byeRequest;
+    private String byeLocalIp;
+
     /**
      * 事务信息
      */

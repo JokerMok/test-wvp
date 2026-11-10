@@ -1,5 +1,8 @@
 package com.genersoft.iot.vmp.media.zlm.dto.hook;
 
+import com.alibaba.fastjson2.annotation.JSONField;
+import com.fasterxml.jackson.annotation.JsonAlias;
+
 /**
  * zlm hook事件中的on_rtp_server_timeout事件的参数
  * @author lin
@@ -7,7 +10,10 @@ package com.genersoft.iot.vmp.media.zlm.dto.hook;
 public class OnRtpServerTimeoutHookParam extends HookParam{
     private int local_port;
     private String stream_id;
-    private int tcpMode;
+    private String app;
+    @JSONField(alternateNames = "tcp_mode")
+    @JsonAlias("tcp_mode")
+    private int tcpMode = -1;
     private boolean re_use_port;
     private String ssrc;
 
@@ -25,6 +31,14 @@ public class OnRtpServerTimeoutHookParam extends HookParam{
 
     public void setStream_id(String stream_id) {
         this.stream_id = stream_id;
+    }
+
+    public String getApp() {
+        return app;
+    }
+
+    public void setApp(String app) {
+        this.app = app;
     }
 
     public int getTcpMode() {

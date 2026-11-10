@@ -166,6 +166,7 @@ media:
     port-range: 30000,30500
     send-port-range: 30502,30550
 user-settings:
+  login-timeout: 1440
   server-id: test-wvp
   interface-authentication: true
   auto-apply-play: false
@@ -205,6 +206,7 @@ sslport=0
 [rtp_proxy]
 port=18985
 port_range=30000-30500
+timeoutSec=3600
 
 [rtc]
 port=0

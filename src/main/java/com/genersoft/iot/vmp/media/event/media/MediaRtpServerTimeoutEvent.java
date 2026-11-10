@@ -2,11 +2,17 @@ package com.genersoft.iot.vmp.media.event.media;
 
 import com.genersoft.iot.vmp.media.bean.MediaServer;
 import com.genersoft.iot.vmp.media.zlm.dto.hook.OnStreamChangedHookParam;
+import lombok.Getter;
+import lombok.Setter;
 
 /**
  * RtpServer收流超时事件
  */
 public class MediaRtpServerTimeoutEvent extends MediaEvent {
+    @Getter
+    @Setter
+    private int localPort;
+
     public MediaRtpServerTimeoutEvent(Object source) {
         super(source);
     }

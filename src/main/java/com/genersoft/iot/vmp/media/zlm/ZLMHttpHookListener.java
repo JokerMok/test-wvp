@@ -24,8 +24,11 @@ import org.springframework.util.ObjectUtils;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.servlet.http.HttpServletRequest;
+import java.net.InetAddress;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.UnknownHostException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -285,23 +288,43 @@ public class ZLMHttpHookListener {
      */
     @ResponseBody
     @PostMapping(value = "/on_rtp_server_timeout", produces = "application/json;charset=UTF-8")
-    public HookResult onRtpServerTimeout(@RequestBody OnRtpServerTimeoutHookParam
-            param) {
+    public HookResult onRtpServerTimeout(@RequestBody OnRtpServerTimeoutHookParam param,
+                                         HttpServletRequest request) {
         log.info("[ZLM HOOK] rtpServer收流超时：{}->{}({})", param.getMediaServerId(), param.getStream_id(), param.getSsrc());
 
-        try {
-            MediaRtpServerTimeoutEvent event = new MediaRtpServerTimeoutEvent(this);
-            MediaServer mediaServerItem = mediaServerService.getOne(param.getMediaServerId());
-            if (mediaServerItem != null) {
-                event.setMediaServer(mediaServerItem);
-                event.setApp(MediaStreamUtil.RTP_APP);
-                applicationEventPublisher.publishEvent(event);
-            }
-        }catch (Exception e) {
-            log.info("[ZLM-HOOK-rtpServer收流超时] 发送通知失败 ", e);
+        if (param.getTcpMode() != 0 || !MediaStreamUtil.RTP_APP.equals(param.getApp())) {
+            return HookResult.SUCCESS();
         }
-
+        try {
+            MediaServer mediaServer = mediaServerService.getOne(param.getMediaServerId());
+            if (mediaServer != null && isMediaServerAddress(mediaServer.getIp(), request.getRemoteAddr())) {
+                MediaRtpServerTimeoutEvent event = new MediaRtpServerTimeoutEvent(this);
+                event.setMediaServer(mediaServer);
+                event.setApp(param.getApp());
+                event.setStream(param.getStream_id());
+                event.setLocalPort(param.getLocal_port());
+                applicationEventPublisher.publishEvent(event);
+            } else {
+                log.warn("[ZLM HOOK] 忽略未匹配媒体节点的收流超时回调，媒体节点: {}, 来源: {}",
+                        param.getMediaServerId(), request.getRemoteAddr());
+            }
+        } catch (Exception e) {
+            log.warn("[ZLM HOOK] 处理收流超时失败，媒体节点: {}", param.getMediaServerId(), e);
+        }
         return HookResult.SUCCESS();
+    }
+
+    private boolean isMediaServerAddress(String host, String remoteAddress) {
+        if (ObjectUtils.isEmpty(host) || ObjectUtils.isEmpty(remoteAddress)) {
+            return false;
+        }
+        try {
+            InetAddress source = InetAddress.getByName(remoteAddress);
+            return Arrays.asList(InetAddress.getAllByName(host)).contains(source);
+        } catch (UnknownHostException e) {
+            log.warn("[ZLM HOOK] 无法解析收流超时回调的媒体节点地址: {}", host);
+            return false;
+        }
     }
 
     /**

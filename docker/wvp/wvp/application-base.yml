@@ -84,6 +84,7 @@ media:
   record-day: 7
   record-assist-port: 0
 user-settings:
+    login-timeout: 1440
     auto-apply-play: true
     play-timeout: 30000
     wait-track: false

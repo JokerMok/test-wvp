@@ -1,5 +1,7 @@
 package com.genersoft.iot.vmp.gb28181.transmit.event.request.impl;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.genersoft.iot.vmp.common.InviteSessionType;
 import com.genersoft.iot.vmp.common.VideoManagerConstants;
 import com.genersoft.iot.vmp.conf.DynamicTask;
@@ -31,6 +33,7 @@ import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import javax.sdp.*;
@@ -38,10 +41,16 @@ import javax.sip.InvalidArgumentException;
 import javax.sip.RequestEvent;
 import javax.sip.SipException;
 import javax.sip.header.CallIdHeader;
+import javax.sip.header.FromHeader;
+import javax.sip.header.SubjectHeader;
 import javax.sip.message.Response;
+import java.net.InetAddress;
 import java.text.ParseException;
+import java.time.Duration;
 import java.util.List;
 import java.util.Vector;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * SIP命令类型： INVITE请求
@@ -52,6 +61,11 @@ import java.util.Vector;
 public class InviteRequestProcessor extends SIPRequestProcessorParent implements InitializingBean, ISIPRequestProcessor {
 
     private final String method = "INVITE";
+
+    private final Cache<String, AtomicLong> rejectedInviteCounts = Caffeine.newBuilder()
+            .maximumSize(1024)
+            .expireAfterAccess(Duration.ofMinutes(5))
+            .build();
 
     @Autowired
     private ISIPCommanderForPlatform cmderFroPlatform;
@@ -283,7 +297,7 @@ public class InviteRequestProcessor extends SIPRequestProcessorParent implements
         CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
 
         if (requesterId == null || channelId == null) {
-            log.warn("[解析INVITE消息] 无法从请求中获取到来源id，返回400错误");
+            logRejectedInvite(request, requesterId, channelId);
             throw new InviteDecodeException(Response.BAD_REQUEST, "request decode fail");
         }
         log.info("[INVITE] 来源ID: {}, callId: {}, 来自：{}：{}",
@@ -362,6 +376,46 @@ public class InviteRequestProcessor extends SIPRequestProcessorParent implements
 
         return inviteInfo;
 
+    }
+
+    private void logRejectedInvite(SIPRequest request, String requesterId, String channelId) {
+        InetAddress sourceAddress = request.getPeerPacketSourceAddress();
+        if (sourceAddress == null) {
+            sourceAddress = request.getRemoteAddress();
+        }
+        String sourceIp = sourceAddress == null ? "unknown" : sourceAddress.getHostAddress();
+        AtomicLong count = rejectedInviteCounts.get(sourceIp, key -> new AtomicLong());
+        if (count.incrementAndGet() != 1) {
+            return;
+        }
+
+        int sourcePort = request.getPeerPacketSourcePort();
+        if (sourcePort <= 0) {
+            sourcePort = request.getRemotePort();
+        }
+        CallIdHeader callId = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
+        log.warn("[解析INVITE消息] 关键字段缺失，返回400，来源={}:{}，缺失来源ID={}，缺失目标通道ID={}，callId={}，From={}，Subject={}",
+                sourceIp, sourcePort, requesterId == null, channelId == null,
+                logValue(callId == null ? null : callId.getCallId()),
+                logValue(request.getHeader(FromHeader.NAME)), logValue(request.getHeader(SubjectHeader.NAME)));
+    }
+
+    @Scheduled(fixedDelay = 60, timeUnit = TimeUnit.SECONDS)
+    public void summarizeRejectedInvites() {
+        rejectedInviteCounts.asMap().forEach((sourceIp, count) -> {
+            long total = count.getAndSet(0);
+            if (total > 1) {
+                log.warn("[解析INVITE消息] 拒绝请求汇总，来源={}，本周期返回400共{}次，已合并{}条重复日志", sourceIp, total, total - 1);
+            }
+        });
+    }
+
+    private String logValue(Object value) {
+        if (value == null) {
+            return "<missing>";
+        }
+        String text = value.toString().replace('\r', ' ').replace('\n', ' ').replace('\t', ' ').trim();
+        return text.length() > 256 ? text.substring(0, 256) + "..." : text;
     }
 
     private String createSendSdp(SendRtpInfo sendRtpItem, InviteMessageInfo inviteInfo, String sdpIp) {

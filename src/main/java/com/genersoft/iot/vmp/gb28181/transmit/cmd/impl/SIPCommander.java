@@ -25,7 +25,9 @@ import com.genersoft.iot.vmp.media.service.IMediaServerService;
 import com.genersoft.iot.vmp.service.bean.ErrorCallback;
 import com.genersoft.iot.vmp.service.bean.SSRCInfo;
 import com.genersoft.iot.vmp.utils.DateUtil;
+import com.genersoft.iot.vmp.utils.IpPortUtil;
 import com.genersoft.iot.vmp.vmanager.bean.ErrorCode;
+import gov.nist.javax.sip.ResponseEventExt;
 import gov.nist.javax.sip.message.SIPRequest;
 import gov.nist.javax.sip.message.SIPResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +41,7 @@ import javax.sip.InvalidArgumentException;
 import javax.sip.ResponseEvent;
 import javax.sip.SipException;
 import javax.sip.SipFactory;
+import javax.sip.address.SipURI;
 import javax.sip.header.CallIdHeader;
 import javax.sip.message.Request;
 import java.text.ParseException;
@@ -290,6 +293,26 @@ public class SIPCommander implements ISIPCommander {
             SsrcTransaction ssrcTransaction = SsrcTransaction.buildForDevice(device.getDeviceId(), channel.getId(),
                     callId,ssrcInfo.getApp(), ssrcInfo.getStream(), ssrcInfo.getSsrc(), mediaServerItem.getId(), response,
                     InviteSessionType.PLAY);
+            boolean confirmed = response.getStatusCode() >= 200 && response.getStatusCode() < 300;
+            ssrcTransaction.setInviteConfirmed(confirmed);
+            if (confirmed && mediaServerItem.isRtpEnable() && "UDP".equalsIgnoreCase(device.getStreamMode())) {
+                ssrcTransaction.setReceivePort(ssrcInfo.getPort());
+                if (responseEvent instanceof ResponseEventExt event
+                        && event.getRemoteIpAddress() != null && event.getRemotePort() > 0
+                        && response.getLocalAddress() != null) {
+                    try {
+                        String localIp = response.getLocalAddress().getHostAddress();
+                        SipURI toUri = (SipURI) response.getToHeader().getAddress().getURI();
+                        SipURI peer = SipFactory.getInstance().createAddressFactory().createSipURI(toUri.getUser(),
+                                IpPortUtil.concatenateIpAndPort(event.getRemoteIpAddress(), String.valueOf(event.getRemotePort())));
+                        Request bye = headerProvider.createByeRequest(localIp, peer, response);
+                        ssrcTransaction.setByeRequest(bye.toString());
+                        ssrcTransaction.setByeLocalIp(localIp);
+                    } catch (InvalidArgumentException | ParseException | SipException ex) {
+                        log.warn("[点播] 保存会话BYE失败，callId: {}", callId, ex);
+                    }
+                }
+            }
             sessionManager.put(ssrcTransaction);
             okEvent.response(e);
         }, timeout);
@@ -560,22 +583,33 @@ public class SIPCommander implements ISIPCommander {
             log.warn("[发送BYE] device为null");
             return;
         }
-        SsrcTransaction ssrcTransaction = null;
-        if (callId != null) {
-            ssrcTransaction = sessionManager.getSsrcTransactionByCallId(callId);
-        }else if (stream != null) {
-            ssrcTransaction = sessionManager.getSsrcTransactionByStream(app, stream);
-        }
+        synchronized (sessionManager) {
+            SsrcTransaction ssrcTransaction = null;
+            if (callId != null) {
+                ssrcTransaction = sessionManager.getSsrcTransactionByCallId(callId);
+            } else if (stream != null) {
+                ssrcTransaction = sessionManager.getSsrcTransactionByStream(app, stream);
+            }
 
-        if (ssrcTransaction == null) {
-            log.info("[发送BYE] 未找到事务信息,设备： device: {}, channel: {}", device.getDeviceId(), channelId);
-            throw new SsrcTransactionNotFoundException(device.getDeviceId(), channelId, callId, stream);
-        }
+            if (ssrcTransaction == null) {
+                log.info("[发送BYE] 未找到事务信息,设备： device: {}, channel: {}", device.getDeviceId(), channelId);
+                throw new SsrcTransactionNotFoundException(device.getDeviceId(), channelId, callId, stream);
+            }
 
-        log.info("[发送BYE] 设备： device: {}, channel: {}, callId: {}", device.getDeviceId(), channelId, ssrcTransaction.getCallId());
-        sessionManager.removeByCallId(ssrcTransaction.getCallId());
-        Request byteRequest = headerProvider.createByteRequest(device, channelId, ssrcTransaction.getSipTransactionInfo());
-        sipSender.transmitRequest(sipLayer.getLocalIp(device.getLocalIp()), byteRequest, null, okEvent);
+            Request bye;
+            String localIp;
+            if (ssrcTransaction.getByeRequest() != null) {
+                bye = SipFactory.getInstance().createMessageFactory().createRequest(ssrcTransaction.getByeRequest());
+                localIp = ssrcTransaction.getByeLocalIp();
+            } else {
+                bye = headerProvider.createByteRequest(device, channelId, ssrcTransaction.getSipTransactionInfo());
+                localIp = sipLayer.getLocalIp(device.getLocalIp());
+            }
+            sipSender.transmitRequest(localIp, bye, null, okEvent);
+            sessionManager.removeByCallId(ssrcTransaction.getCallId());
+            log.info("[发送BYE] 设备： device: {}, channel: {}, callId: {}, target: {}", device.getDeviceId(),
+                    channelId, ssrcTransaction.getCallId(), bye.getRequestURI());
+        }
     }
 
     @Override

@@ -1,5 +1,13 @@
 # 测试 WVP
 
+## 源码更新（2026-11-10）
+
+仓库已合入 11 月 9 日正式修订：UDP 收流超时后的原会话 BYE 清理、Docker 网页播放地址修复、INVITE 拒绝日志明细与汇总、登录 1440 分钟及 Cookie 1 天、ZLM RTP 超时 3600 秒。来源及验证范围见 [正式更新记录](docs/production-update-20261109.md)。腾讯云 HTTPS 媒体出口、登录、日志和入口配置继续沿用。
+
+本次完成源码提交，服务器发布待另行执行。下方部署记录仍对应 11 月 6 日的运行版本。发布时在现有 `shared/config/application.yml` 合并 `user-settings.login-timeout: 1440`，在 `shared/config/media/config.ini` 的 `[rtp_proxy]` 段合并 `timeoutSec=3600`，按既有流程更新服务后重新登录。该超时用于连续收不到 RTP 时的回收，首次点播等待和无人观看回收分别生效。
+
+`bootstrap.sh` 已设置相同的首次初始化参数；已初始化的现场继续使用现有配置文件、数据和 JWK。正式 Docker 环境的 Nginx 修订通过模板生效；腾讯云继续使用现有 Caddy HTTPS 入口。
+
 ## 当前部署
 
 - 2026-11-06 在 `tencent-main` 完成部署和公网接入。应用版本为 `2.7.4`，当前网页和入口配置提交为 `75f8991a6ca8058ce65a2bc73efeca8ba460c1a0`，后端运行提交为 `d1da553757764c5a5326c5eab3dd5a824de02977`。版本以 `current/RELEASE.json` 为准。[私有仓库](https://github.com/JokerMok/test-wvp)
