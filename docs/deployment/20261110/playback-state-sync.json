@@ -1,0 +1,109 @@
+{
+  "checked_at": "2026-11-10T17:07:18.163911+08:00",
+  "frontend_git_sha": "3973c2279455ad06288202c2797a5ed4a8337715",
+  "backend_git_sha": "eb7728e8f684f5a32e67d8786a5da763b1c99b2a",
+  "url": "https://wvp.shizibandu.icu/",
+  "frontend_archive": "test-wvp-3973c2279455ad06288202c2797a5ed4a8337715-frontend.tar.gz",
+  "frontend_archive_sha256": "a7b992381896ce6f7906c6f39ef1df0eb94e6c5449caee4a6124821094782f48",
+  "backend_base_archive": "test-wvp-eb7728e8f684f5a32e67d8786a5da763b1c99b2a.tar.gz",
+  "backend_base_sha256": "2c074afdcc5ad495b75a1dceb46319671bc62e59d614fb9521f2d766527df9ee",
+  "jar_sha256": "8087e3626af9e56e9cccdda05f03bb44711426fe07b05f6ce02e07520b42a205",
+  "targeted_backend_tests": {
+    "found": 27,
+    "succeeded": 27,
+    "failed": 0,
+    "aborted": 0
+  },
+  "frontend_state_assertions": 13,
+  "existing_frontend_assertions": 38,
+  "tencent_backend_and_frontend_build_passed": true,
+  "browser": {
+    "passed": true,
+    "browser": "Google Chrome",
+    "bothPagesMatchOwnLiveSnapshot": true,
+    "common": [
+      {
+        "channelId": 20,
+        "state": "STOPPED",
+        "auto": "关闭",
+        "stopVisible": false
+      },
+      {
+        "channelId": 18,
+        "state": "PLAYING",
+        "auto": "已开启",
+        "stopVisible": true
+      },
+      {
+        "channelId": 19,
+        "state": "PLAYING",
+        "auto": "已开启",
+        "stopVisible": true
+      },
+      {
+        "channelId": 13,
+        "state": "STOPPED",
+        "auto": "关闭",
+        "stopVisible": false
+      }
+    ],
+    "device": [
+      {
+        "channelId": 19,
+        "state": "PLAYING",
+        "auto": "已开启",
+        "stopVisible": true
+      },
+      {
+        "channelId": 18,
+        "state": "PLAYING",
+        "auto": "已开启",
+        "stopVisible": true
+      },
+      {
+        "channelId": 20,
+        "state": "STOPPED",
+        "auto": "关闭",
+        "stopVisible": false
+      }
+    ],
+    "sourceStateChangedBetweenSnapshots": [],
+    "anonymousStatus": 401,
+    "taskWrites": 0,
+    "playOrStopRequests": 0,
+    "pageErrors": []
+  },
+  "read_only_snapshot_interval_seconds": 5,
+  "auto_play_default_interval_seconds": 60,
+  "configuration_caddy_credentials_and_jwk_unchanged": true,
+  "udp_device_modes_and_channel_identities_unchanged": true,
+  "task_settings_unchanged": true,
+  "task_count": 4,
+  "enabled_task_count": 2,
+  "final_frontend_switch": {
+    "frontend_git_sha": "3973c2279455ad06288202c2797a5ed4a8337715",
+    "backend_git_sha": "eb7728e8f684f5a32e67d8786a5da763b1c99b2a",
+    "frontend_only_switch": true,
+    "backend_pid_unchanged": true,
+    "previous": "/srv/apps/test-wvp/releases/d04ae0d66dedf0268c12e82ef1cf962d347c30c0",
+    "unchanged_files_hardlinked": 121,
+    "new_written_bytes": 235953,
+    "free_bytes": 2160857088,
+    "health_check_passed": true
+  },
+  "previous_release": "/srv/apps/test-wvp/releases/d04ae0d66dedf0268c12e82ef1cf962d347c30c0",
+  "static_resource_deduplication": {
+    "only_identical_root_owned_immutable_static_files": true,
+    "files_linked": 164,
+    "free_before": 2202648576,
+    "free_after": 2317950976,
+    "all_paths_and_bytes_preserved": true
+  },
+  "formal_archive": "wvp-正式环境原包结构-自动续播与日志修复-20261110-状态同步修复.tar.gz",
+  "formal_archive_sha256": "467085308ef4f4e1903a464d7dbe816c8b99bca8dba4f22db20a27bd2f580b85",
+  "formal_configuration_or_data_files_unchanged": 224,
+  "formal_server_deployed": false,
+  "independent_formal_build_repeated": false,
+  "actual_video_decode_or_long_playback_acceptance": false,
+  "backend_update_backup": "shared/backups/before-20261110T084632-7127a0f636f05b23047411654e4882b5ca8a67ee"
+}

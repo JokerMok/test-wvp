@@ -2,7 +2,7 @@
 
 ## 自动续播与日志修复（2026-11-10，腾讯云已部署）
 
-腾讯云前后端已更新至 `7127a0f636f05b23047411654e4882b5ca8a67ee`：先按真实媒体判定收流，再区分待设备注册与通道离线；兼容ZLM成功但无data的无流响应。默认60秒、人工停止暂停；你已暂停的两条任务保持原状。现场所属设备尚未注册，尾号0003手动点播曾返回403，实际续播待对端恢复后验收。详见 [逻辑修复及故障边界](docs/deployment/20261110/续播逻辑修复.md)。正式服务器未更新。
+腾讯云前端已更新至 `3973c2279455ad06288202c2797a5ed4a8337715`，后端 `eb7728e8f684f5a32e67d8786a5da763b1c99b2a`。通道总表与设备内通道页共用实时媒体状态，每5秒刷新；自动续播开关与播放状态分开，停止操作规则一致，页面旧流编号不能覆盖新状态。实测0001/0002两页均收流中、续播已开启且可停止。配置、UDP及用户任务设置保留；正式服务器未更新。详见 [播放状态同步与验证](docs/deployment/20261110/播放状态同步.md)。
 
 ## 源码更新（2026-11-10）
 
@@ -14,9 +14,9 @@
 
 ## 当前部署
 
-- 2026-11-10 更新 `tencent-main`，WVP 2.7.4，前后端 `7127a0f636f05b23047411654e4882b5ca8a67ee`。版本以 `current/RELEASE.json` 为准。[源码仓库](https://github.com/JokerMok/test-wvp)
+- 2026-11-10 更新 `tencent-main`，WVP 2.7.4，前端 `3973c2279455ad06288202c2797a5ed4a8337715` / 后端 `eb7728e8f684f5a32e67d8786a5da763b1c99b2a`。版本以 `current/RELEASE.json` 为准。[源码仓库](https://github.com/JokerMok/test-wvp)
 - 源码以正式环境归档为基线，纳入 2026-11-05 的 UDP 修订。测试环境使用独立数据库和凭证。来源及原归档校验值见 `SOURCE.md`。
-- 当前完整发布包为 `releases/test-wvp-7127a0f636f05b23047411654e4882b5ca8a67ee.tar.gz`，SHA-256 `f7e6f60232c58b428987004c89632f34e1e2534e77bdf399b69312767a187ac9`。`previous` 指向 `f91b3639451b427ae27107363b2d8f18b42ed33a`。初始化、迁移、网页和JAR继续由 `current/SHA256SUMS` 校验。
+- 当前网页包为 `releases/test-wvp-3973c2279455ad06288202c2797a5ed4a8337715-frontend.tar.gz`，SHA-256 `a7b992381896ce6f7906c6f39ef1df0eb94e6c5449caee4a6124821094782f48`；复用并校验后端完整包 `releases/test-wvp-eb7728e8f684f5a32e67d8786a5da763b1c99b2a.tar.gz` 的JAR。`previous` 指向 `d04ae0d66dedf0268c12e82ef1cf962d347c30c0`。初始化、迁移、网页和JAR继续由 `current/SHA256SUMS` 校验。
 - 项目目录为 `/srv/apps/test-wvp`。`test-wvp{,-db,-cache,-media}.service` 均已启动并启用开机自启。WVP 使用宿主 Java 21，MySQL 8.4.11 与 Redis 8.0.5 为独立实例。ZLMediaKit 使用官方 `linux/amd64` 镜像 `sha256:f0022a9ebe3085f2710a5a9312975564f22a8c8449be88217b55ce7e3cf9539b` 的校验后运行文件，来源为腾讯云镜像端点。
 
 | 组件 | 服务器地址 |
@@ -134,7 +134,7 @@ ssh tencent-main "sudo /srv/apps/test-wvp/deploy/manage.sh install $sha" < "$pac
 
 更新前确认新发布解压后仍有至少 2 GiB 可用空间，供现有备份任务运行。本轮为满足门槛清理了可重建的 APT 下载包和索引缓存，下次安装依赖前运行 `apt-get update`。脚本校验发布文件和数据库初始化脚本，更新前备份，健康检查通过后记录 `previous`。发布失败会恢复已有可用版本。若初始化 SQL 或其他迁移行为发生变化，先单独评估迁移和数据恢复。
 
-在服务器用 `sudo /srv/apps/test-wvp/deploy/manage.sh status` 查看状态，用 `sudo /srv/apps/test-wvp/deploy/manage.sh rollback` 切回 `previous` 所指的已验证版本，当前为 `f91b3639451b427ae27107363b2d8f18b42ed33a`。数据库和文件恢复按备份单独处理。
+在服务器用 `sudo /srv/apps/test-wvp/deploy/manage.sh status` 查看状态，用 `sudo /srv/apps/test-wvp/deploy/manage.sh rollback` 切回 `previous` 所指的已验证版本，当前为 `d04ae0d66dedf0268c12e82ef1cf962d347c30c0`。数据库和文件恢复按备份单独处理。
 
 下列为2026-11-06的SIP密码及入口历史回退；仅需撤销当时配置时使用，先按对应版本确认恢复点。当前代码回退使用上文 `rollback`。
 
