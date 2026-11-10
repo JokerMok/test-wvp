@@ -168,6 +168,10 @@ public class AutoPlayService {
 
     Health probe(MediaServer media,String app,String stream) {
         ZLMResult<JSONArray> result=zlm.getMediaList(media,app,stream==null || stream.isBlank() ? "__wvp_auto_health_probe__" : stream);
+        return mediaHealth(result, app, stream);
+    }
+
+    static Health mediaHealth(ZLMResult<JSONArray> result, String app, String stream) {
         if (result==null || result.getCode()!=0) return Health.UNKNOWN;
         // ZLM returns only {"code":0} when no matching source exists.
         if (result.getData()==null || stream==null || stream.isBlank()) return Health.MISSING;

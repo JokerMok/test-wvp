@@ -113,19 +113,22 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="自动续播" width="110">
+        <el-table-column label="播放状态" width="110">
           <template slot-scope="scope">
-            <el-tooltip v-if="autoTasks[scope.row.gbId]" :content="autoTasks[scope.row.gbId].lastError || autoStates[autoTasks[scope.row.gbId].status]" placement="top">
-              <el-tag size="small" :type="autoTasks[scope.row.gbId].status === 'PLAYING' ? 'success' : 'info'">{{ autoStates[autoTasks[scope.row.gbId].status] || '等待检查' }}</el-tag>
-            </el-tooltip>
-            <span v-else>关闭</span>
+            <el-tag size="small" :type="playbackType(scope.row.gbId)">{{ playbackLabel(scope.row.gbId) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="自动续播" width="100">
+          <template slot-scope="scope">
+            <el-tag v-if="playbackState(scope.row.gbId).autoPlayConfigured" size="small" :type="playbackState(scope.row.gbId).autoPlayEnabled ? 'success' : 'info'">{{ autoPlaybackLabel(scope.row.gbId) }}</el-tag>
+            <span v-else>{{ autoPlaybackLabel(scope.row.gbId) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="操作" min-width="210" fixed="right">
           <template v-slot:default="scope">
             <el-button
               size="medium"
-              :disabled="scope.row.gbStatus !== 'ON'"
+              :disabled="scope.row.gbStatus !== 'ON' && playbackState(scope.row.gbId).state !== 'PLAYING'"
               icon="el-icon-video-play"
               type="text"
               :loading="scope.row.playLoading"
@@ -133,7 +136,7 @@
             >播放
             </el-button>
             <el-button
-              v-if="!!scope.row.streamId || (autoTasks[scope.row.gbId] && autoTasks[scope.row.gbId].enabled)"
+              v-if="canStopPlayback(scope.row.gbId, scope.row.streamId)"
               size="medium"
               icon="el-icon-switch-button"
               type="text"
@@ -197,7 +200,7 @@
 <script>
 import devicePlayer from './player.vue'
 import AutoPlayDialog from './autoPlay.vue'
-import { getAutoPlayTasks, autoPlayStates } from '@/api/autoPlay'
+import channelPlayback from '@/mixins/channelPlayback'
 import audioTalk from './audioTalk.vue'
 import ptzConfig from './ptzConfig.vue'
 import Edit from './edit.vue'
@@ -225,7 +228,9 @@ export default {
       default: 15
     }
   },
+  mixins: [channelPlayback],
   computed: {
+    playbackChannelIds() { return this.channelList.map(channel => channel.gbId) },
     excelName(){
       return '通道列表-' + this.currentPage
     }
@@ -276,31 +281,18 @@ export default {
       groupDeviceId: null,
       groupBusiness: null,
 
-      autoTasks: {},
-      autoStates: autoPlayStates,
-      autoTimer: null,
-      autoDisposed: false,
       multipleSelection: []
     }
   },
   mounted() {
-    this.loadAutoPlay()
-    this.autoTimer = setInterval(() => this.loadAutoPlay(), 15000)
     this.initData()
   },
   destroyed() {
-    this.autoDisposed = true
-    clearInterval(this.autoTimer)
     this.$destroy('videojs')
     clearTimeout(this.updateLooper)
   },
   methods: {
-    loadAutoPlay() {
-      getAutoPlayTasks().then(tasks => {
-        if (this.autoDisposed) return
-        const map = {}; tasks.forEach(task => { map[task.channelId] = task }); this.autoTasks = map
-      }).catch(() => {})
-    },
+    loadAutoPlay() { return this.refreshPlaybackStatus() },
     handleSelectionChange: function(val) {
       this.multipleSelection = val
     },
@@ -349,6 +341,7 @@ export default {
       this.$store.dispatch('commonChanel/playChannel', itemData.gbId)
         .then((data) => {
           itemData.streamId = data.stream
+          this.refreshPlaybackStatus()
           this.$refs.devicePlayer.openDialog('media', itemData.gbId, {
             streamInfo: data,
             hasAudio: itemData.hasAudio

@@ -136,11 +136,22 @@
             </div>
           </template>
         </el-table-column>
+        <el-table-column label="播放状态" width="110">
+          <template slot-scope="scope">
+            <el-tag size="small" :type="playbackType(scope.row.id)">{{ playbackLabel(scope.row.id) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="自动续播" width="100">
+          <template slot-scope="scope">
+            <el-tag v-if="playbackState(scope.row.id).autoPlayConfigured" size="small" :type="playbackState(scope.row.id).autoPlayEnabled ? 'success' : 'info'">{{ autoPlaybackLabel(scope.row.id) }}</el-tag>
+            <span v-else>{{ autoPlaybackLabel(scope.row.id) }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" min-width="340" fixed="right">
           <template v-slot:default="scope">
             <el-button
               size="medium"
-              :disabled="device == null || device.online === 0"
+              :disabled="(device == null || device.online === 0) && playbackState(scope.row.id).state !== 'PLAYING'"
               icon="el-icon-video-play"
               type="text"
               :loading="scope.row.playLoading"
@@ -148,9 +159,8 @@
             >播放
             </el-button>
             <el-button
-              v-if="!!scope.row.streamId"
+              v-if="canStopPlayback(scope.row.id, scope.row.streamId)"
               size="medium"
-              :disabled="device == null || device.online === 0"
               icon="el-icon-switch-button"
               type="text"
               style="color: #f56c6c"
@@ -224,9 +234,14 @@ import audioTalk from '../dialog/audioTalk.vue'
 import Edit from './edit.vue'
 import ptzConfig from '@/views/device/channel/ptzConfig.vue'
 import cameraConfig from './cameraConfig.vue'
+import channelPlayback from '@/mixins/channelPlayback'
 
 export default {
   name: 'ChannelList',
+  mixins: [channelPlayback],
+  computed: {
+    playbackChannelIds() { return this.deviceChannelList.map(channel => channel.id) }
+  },
   components: {
     devicePlayer,
     audioTalk,
@@ -366,6 +381,7 @@ export default {
             this.getSnapErrorEvent(snapId)
           }, 5000)
           itemData.streamId = data.stream
+          this.refreshPlaybackStatus()
           this.$refs.devicePlayer.openDialog('media', deviceId, channelId, {
             streamInfo: data,
             hasAudio: itemData.hasAudio
@@ -421,6 +437,7 @@ export default {
         deviceId: this.deviceId,
         channelId: itemData.deviceId
       }).then(data => {
+        this.refreshPlaybackStatus()
         this.initData()
       }).catch((error) => {
         if (error.response.status === 402) { // 已经停止过
