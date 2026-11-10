@@ -1,0 +1,74 @@
+{
+  "checked_at": "2026-11-10T16:04:54.986446+08:00",
+  "source_git_sha": "7127a0f636f05b23047411654e4882b5ca8a67ee",
+  "deployed": true,
+  "url": "https://wvp.shizibandu.icu/",
+  "previous_release": "f91b3639451b427ae27107363b2d8f18b42ed33a",
+  "runtime_archive": "test-wvp-7127a0f636f05b23047411654e4882b5ca8a67ee.tar.gz",
+  "runtime_archive_sha256": "f7e6f60232c58b428987004c89632f34e1e2534e77bdf399b69312767a187ac9",
+  "backend_jar_sha256": "8a51ee599c2f1c2559cad28491c713a6ddc73d93b0cae872c19993269ebc93e9",
+  "targeted_tests": {
+    "found": 18,
+    "succeeded": 18,
+    "failed": 0,
+    "aborted": 0
+  },
+  "frontend_entry_api_checks": 17,
+  "frontend_player_log_checks": 21,
+  "backend_build_passed": true,
+  "frontend_build_passed": true,
+  "browser": {
+    "passed": true,
+    "browser": "Google Chrome",
+    "taskCount": 2,
+    "sourceNamesAndCodesVisible": true,
+    "defaultIntervalSeconds": 60,
+    "states": [
+      {
+        "channelId": 2,
+        "enabled": false,
+        "status": "PAUSED"
+      },
+      {
+        "channelId": 4,
+        "enabled": false,
+        "status": "PAUSED"
+      }
+    ],
+    "taskWrites": 0,
+    "playRequests": 0,
+    "pageErrors": []
+  },
+  "configuration_caddy_credentials_and_jwk_unchanged": true,
+  "udp_devices_and_five_channels_unchanged": true,
+  "existing_user_tasks_unchanged": true,
+  "user_tasks_count": 2,
+  "enabled_user_tasks": 0,
+  "zlm_successful_empty_response": {
+    "code": 0,
+    "has_data": false
+  },
+  "observations": {
+    "catalog_channel_suffixes_online": [
+      "0001",
+      "0003"
+    ],
+    "shared_parent_registered": false,
+    "manual_invite_rejection": {
+      "at_beijing": "2026-11-10 15:12:50.354",
+      "channel_suffix": "0003",
+      "status": 403,
+      "reason": "Forbidden"
+    },
+    "rtp_packet_absence_proven": false,
+    "actual_camera_recovery_accepted": false
+  },
+  "formal_archive": "wvp-正式环境原包结构-自动续播与日志修复-20261110-逻辑修复.tar.gz",
+  "formal_archive_sha256": "52f0f653a2fddacc9c90eba8ee436d845c55d45ee3ca8c9b6becbfd717165ddb",
+  "formal_configuration_or_data_files_unchanged": 224,
+  "formal_server_deployed": false,
+  "independent_formal_build_repeated": false,
+  "apt_regenerable_index_cache_removed_bytes": 162261831,
+  "free_bytes_after_deploy": 2205650944,
+  "rollback_backup": "shared/backups/before-20261110T074724-f91b3639451b427ae27107363b2d8f18b42ed33a"
+}
