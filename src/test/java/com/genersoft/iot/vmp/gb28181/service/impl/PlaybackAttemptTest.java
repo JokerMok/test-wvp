@@ -54,6 +54,31 @@ class PlaybackAttemptTest {
         AtomicInteger done=new AtomicInteger();service.claim(InviteSessionType.PLAY,145,null,(c,m,d)->done.incrementAndGet());
         service.cancelPlay(145,"manual");assertEquals(1,done.get());assertFalse(service.isPlayPending(145));
     }
+    @Test void allocationReturningAfterManualCancelDoesNotWriteSessionOrSendInvite() {
+        PlayServiceImpl play = new PlayServiceImpl();
+        var receiver=mock(com.genersoft.iot.vmp.service.IReceiveRtpServerService.class);
+        var mediaService=mock(com.genersoft.iot.vmp.media.service.IMediaServerService.class);
+        var commander=mock(com.genersoft.iot.vmp.gb28181.transmit.cmd.ISIPCommander.class);
+        var media=new com.genersoft.iot.vmp.media.bean.MediaServer();media.setRtpEnable(true);
+        var device=new com.genersoft.iot.vmp.gb28181.bean.Device();device.setDeviceId("device");
+        var channel=new com.genersoft.iot.vmp.gb28181.bean.DeviceChannel();channel.setId(145);channel.setDeviceId("channel");
+        var settings=new UserSetting();settings.setPlayTimeout(15000);
+        ReflectionTestUtils.setField(play,"inviteStreamService",service);
+        ReflectionTestUtils.setField(play,"receiveRtpServerService",receiver);
+        ReflectionTestUtils.setField(play,"mediaServerService",mediaService);
+        ReflectionTestUtils.setField(play,"cmder",commander);
+        ReflectionTestUtils.setField(play,"userSetting",settings);
+        doReturn(null).when(service).getInviteInfoByDeviceAndChannel(any(),any());
+        when(receiver.openGbRTPServerForPlay(eq(media),eq(device),eq(channel),isNull(),anyBoolean(),any())).thenAnswer(call->{
+            service.cancelPlay(145,"manual");
+            return new com.genersoft.iot.vmp.service.bean.SSRCInfo(30000,"200001879","rtp","device_channel");
+        });
+        assertNull(ReflectionTestUtils.invokeMethod(play,"play",media,device,channel,null,Boolean.FALSE,null));
+        verify(service,never()).updateInviteInfo(any(com.genersoft.iot.vmp.common.InviteInfo.class));
+        verifyNoInteractions(commander);
+        verify(mediaService).closeRTPServer(media,"rtp","0BEBC957");
+        assertFalse(service.isPlayPending(145));
+    }
     @Test void concurrentClicksHaveOnlyOneInitiator() throws Exception {
         ExecutorService pool=Executors.newFixedThreadPool(8);AtomicInteger owners=new AtomicInteger(),done=new AtomicInteger();
         try {

@@ -489,6 +489,14 @@ public class PlayServiceImpl implements IPlayService {
                         null);
                 return null;
             }
+            // Allocation may return after a manual cancellation or the attempt deadline.
+            // Close only that attempt's raw SSRC endpoint; never start a late INVITE.
+            if (!inviteStreamService.isCurrent(attempt)) {
+                String allocatedStream = mediaServer.isRtpEnable()
+                        ? String.format("%08x", Long.parseLong(ssrcInfo.getSsrc())).toUpperCase() : ssrcInfo.getStream();
+                mediaServerService.closeRTPServer(mediaServer, ssrcInfo.getApp(), allocatedStream);
+                return null;
+            }
             String sdpIp = !ObjectUtils.isEmpty(device.getSdpIp()) ? device.getSdpIp() : mediaServer.getSdpIp();
             log.info("[点播开始] 设备编号: {}, 通道编号: {}, 收流地址： {}:{}, 流ID：{}, 收流模式：{}, SSRC: {}, SSRC校验：{}",
                     device.getDeviceId(), channel.getDeviceId(), sdpIp, ssrcInfo.getPort(), ssrcInfo.getStream(), device.getStreamMode(),
@@ -527,13 +535,15 @@ public class PlayServiceImpl implements IPlayService {
                 }, userSetting.getPlayTimeout().longValue());
             } catch (InvalidArgumentException | SipException | ParseException e) {
                 log.error("[命令发送失败] 点播消息: {}", e.getMessage());
-                receiveRtpServerService.closeRTPServer(mediaServer, ssrcInfo.getApp(), ssrcInfo.getStream());
-                sessionManager.removeByStream(ssrcInfo.getApp(), ssrcInfo.getStream());
-                inviteStreamService.complete(attempt,
+                SsrcTransaction failedSession = sessionManager.getSsrcTransactionByStream(ssrcInfo.getApp(), ssrcInfo.getStream());
+                if (inviteStreamService.complete(attempt,
                         InviteErrorCode.ERROR_FOR_SIP_SENDING_FAILED.getCode(),
-                        InviteErrorCode.ERROR_FOR_SIP_SENDING_FAILED.getMsg(), null);
-
-                inviteStreamService.removeInviteInfoByDeviceAndChannel(InviteSessionType.PLAY, channel.getId());
+                        InviteErrorCode.ERROR_FOR_SIP_SENDING_FAILED.getMsg(), null)) {
+                    String failedStream = mediaServer.isRtpEnable()
+                            ? String.format("%08x", Long.parseLong(ssrcInfo.getSsrc())).toUpperCase() : ssrcInfo.getStream();
+                    mediaServerService.closeRTPServer(mediaServer, ssrcInfo.getApp(), failedStream);
+                    if (failedSession != null && ssrcInfo.getSsrc().equals(failedSession.getSsrc())) sessionManager.removeByCallId(failedSession.getCallId());
+                }
             }
             return ssrcInfo;
         } catch (Throwable e) {
