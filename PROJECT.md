@@ -1,5 +1,9 @@
 # 测试 WVP
 
+## 自动续播与日志修复（2026-11-10，尚未部署）
+
+已增加后台自动续播，默认 60 秒检查，人工停止时暂停；同时修复单通道点播请求不能释放、正式 Docker 实时日志代理和日志连接。先在现有数据库执行 `数据库/2.7.4/更新-mysql-自动续播-20261110.sql`，再更新应用及网页。功能、迁移、回退和验证边界见 [本次更新](docs/playback-log-auto-play-20261110.md)。配置与 UDP 保持原有设置，下方服务器运行记录不代表已部署本次代码。
+
 ## 源码更新（2026-11-10）
 
 仓库已合入 11 月 9 日正式修订：UDP 收流超时后的原会话 BYE 清理、Docker 网页播放地址修复、INVITE 拒绝日志明细与汇总、登录 1440 分钟及 Cookie 1 天、ZLM RTP 超时 3600 秒。来源及验证范围见 [正式更新记录](docs/production-update-20261109.md)。腾讯云 HTTPS 媒体出口、登录、日志和入口配置继续沿用。
@@ -10,7 +14,7 @@
 
 ## 当前部署
 
-- 2026-11-06 在 `tencent-main` 完成部署和公网接入。应用版本为 `2.7.4`，当前网页和入口配置提交为 `75f8991a6ca8058ce65a2bc73efeca8ba460c1a0`，后端运行提交为 `d1da553757764c5a5326c5eab3dd5a824de02977`。版本以 `current/RELEASE.json` 为准。[私有仓库](https://github.com/JokerMok/test-wvp)
+- 2026-11-06 在 `tencent-main` 完成部署和公网接入。应用版本为 `2.7.4`，当时网页和入口配置提交为 `75f8991a6ca8058ce65a2bc73efeca8ba460c1a0`，后端运行提交为 `d1da553757764c5a5326c5eab3dd5a824de02977`。版本以 `current/RELEASE.json` 为准。[源码仓库](https://github.com/JokerMok/test-wvp)
 - 源码以正式环境归档为基线，纳入 2026-11-05 的 UDP 修订。测试环境使用独立数据库和凭证。来源及原归档校验值见 `SOURCE.md`。
 - 当前前端发布包 SHA-256 为 `2eabf0e00613815e2f875720ffd9236e4635dd51908b8e92a98198327140b02f`，安装时复用并校验上一版的 JAR（SHA-256 `27db37756e127dd431e6e5ff40472e46cc1c8c96cea010a248a775a555dd1cb3`）。上一版完整发布包 SHA-256 为 `5a8b9af78919c95b497455fd8fb2517a3d8e50e3ca4dfa4ccf17f38fbb1ef9da`。两份包均存放在 Mac 项目的 `releases/` 下，服务器的 `current/SHA256SUMS` 覆盖 JAR、数据库初始化 SQL 和正式静态文件。
 - 项目目录为 `/srv/apps/test-wvp`。`test-wvp{,-db,-cache,-media}.service` 均已启动并启用开机自启。WVP 使用宿主 Java 21，MySQL 8.4.11 与 Redis 8.0.5 为独立实例。ZLMediaKit 使用官方 `linux/amd64` 镜像 `sha256:f0022a9ebe3085f2710a5a9312975564f22a8c8449be88217b55ce7e3cf9539b` 的校验后运行文件，来源为腾讯云镜像端点。

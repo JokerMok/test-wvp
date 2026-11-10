@@ -9,9 +9,9 @@
 
     <div v-if="showButton" id="buttonsBox" class="buttons-box" :style="{ opacity: showBar ? 1 : 0, pointerEvents: showBar ? 'auto' : 'none' }">
       <div class="buttons-box-left">
-        <i v-if="!playing" class="iconfont icon-play h265web-btn" @click="unPause" />
-        <i v-if="playing" class="iconfont icon-pause h265web-btn" @click="pause" />
-        <i class="iconfont icon-stop h265web-btn" @click="destroy" />
+        <i v-if="!playing" class="iconfont icon-play h265web-btn" @click="resumeByUser" />
+        <i v-if="playing" class="iconfont icon-pause h265web-btn" @click="pauseByUser" />
+        <i class="iconfont icon-stop h265web-btn" @click="stopByUser" />
         <i v-if="isNotMute" class="iconfont icon-audio-high h265web-btn" @click="mute()" />
         <i v-if="!isNotMute" class="iconfont icon-audio-mute h265web-btn" @click="cancelMute()" />
       </div>
@@ -77,6 +77,9 @@ export default {
     this.destroy()
   },
   methods: {
+    stopByUser() { this.$emit('manualPause'); this.destroy() },
+    pauseByUser() { this.$emit('manualPause'); this.pause() },
+    resumeByUser() { this.$emit('manualResume'); this.unPause() },
     updatePlayerDomSize() {
       const dom = this.$refs.container
       if (!this.parentNodeResizeObserver) {
@@ -135,6 +138,7 @@ export default {
         options
       ))
       const h265web = h265webPlayer[this._uid]
+      h265web.onError = () => this.$emit('playbackError')
       h265web.onOpenFullScreen = () => {
         this.fullscreen = true
       }

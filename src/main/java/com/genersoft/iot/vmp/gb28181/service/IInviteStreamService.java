@@ -63,6 +63,23 @@ public interface IInviteStreamService {
      */
     boolean onceAndFirst(InviteSessionType type, Integer channelId, String stream, ErrorCallback<StreamInfo> callback);
 
+    record Attempt(String key, String token, boolean owner) {}
+
+    Attempt claim(InviteSessionType type, Integer channelId, String stream, ErrorCallback<StreamInfo> callback);
+
+    boolean isCurrent(Attempt attempt);
+
+    boolean runIfCurrent(Attempt attempt, Runnable action);
+
+    boolean complete(Attempt attempt, int code, String msg, StreamInfo data);
+
+    boolean completeReady(Attempt attempt, java.util.function.Supplier<StreamInfo> ready);
+
+    boolean isPlayPending(Integer channelId);
+
+    void cancelPlay(Integer channelId, String reason);
+
+
     /**
      * 调用一个invite回调
      */

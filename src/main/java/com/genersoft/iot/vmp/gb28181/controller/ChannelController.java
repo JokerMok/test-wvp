@@ -61,6 +61,15 @@ public class ChannelController {
     private UserSetting userSetting;
 
     @Autowired
+    private com.genersoft.iot.vmp.gb28181.service.impl.AutoPlayPolicy autoPlayPolicy;
+
+    @Autowired
+    private com.genersoft.iot.vmp.gb28181.service.IInviteStreamService inviteStreamService;
+
+    @Autowired
+    private com.genersoft.iot.vmp.gb28181.service.IDeviceChannelService deviceChannels;
+
+    @Autowired
     private VectorTileCatch vectorTileCatch;
 
 
@@ -309,7 +318,13 @@ public class ChannelController {
         CommonGBChannel channel = channelService.getOne(channelId);
         Assert.notNull(channel, "通道不存在");
 
-        DeferredResult<WVPResult<StreamContent>> result = new DeferredResult<>(userSetting.getPlayTimeout().longValue());
+        DeferredResult<WVPResult<StreamContent>> result = new DeferredResult<>(userSetting.getPlayTimeout().longValue() + 5000L);
+
+        request.setAttribute("wvp.channelId", channelId);
+        result.onTimeout(() -> {
+            log.warn("[点播HTTP等待超时] channelId={}, path={}", channelId, request.getRequestURI());
+            result.setResult(WVPResult.fail(ErrorCode.ERROR100.getCode(), "点播等待视频流超时，请重试"));
+        });
 
         ErrorCallback<StreamInfo> callback = (code, msg, streamInfo) -> {
             if (code == InviteErrorCode.SUCCESS.getCode()) {
@@ -350,7 +365,11 @@ public class ChannelController {
         Assert.notNull(channelId,"参数异常");
         CommonGBChannel channel = channelService.getOne(channelId);
         Assert.notNull(channel, "通道不存在");
-        channelPlayService.stopPlay(channel);
+        autoPlayPolicy.manualStop(channelId, () -> {
+            DeviceChannel source = Integer.valueOf(com.genersoft.iot.vmp.common.enums.ChannelDataType.GB28181).equals(channel.getDataType()) ? deviceChannels.getOneForSourceById(channelId) : null;
+            inviteStreamService.cancelPlay(source == null ? channelId : source.getId(), "人工停止点播");
+            channelPlayService.stopPlay(channel);
+        });
     }
 
     @Operation(summary = "开始对讲", security = @SecurityRequirement(name = JwtUtils.HEADER))

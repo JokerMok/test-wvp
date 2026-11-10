@@ -11,6 +11,9 @@
         :has-audio="hasAudio"
         :show-button="showButton"
         fluent autoplay live
+        @manualPause="manualPaused = true"
+        @manualResume="manualPaused = false"
+        @playbackError="recoveryNeeded = true"
         @playTimeChange="$emit('playTimeChange', $event)"
         @playStatusChange="$emit('playStatusChange', $event)"
       />
@@ -21,6 +24,9 @@
         :has-audio="hasAudio"
         :show-button="showButton"
         fluent autoplay live
+        @manualPause="manualPaused = true"
+        @manualResume="manualPaused = false"
+        @playbackError="recoveryNeeded = true"
         @playTimeChange="$emit('playTimeChange', $event)"
         @playStatusChange="$emit('playStatusChange', $event)"
       />
@@ -31,6 +37,9 @@
         :has-audio="hasAudio"
         :show-button="showButton"
         fluent autoplay live
+        @manualPause="manualPaused = true"
+        @manualResume="manualPaused = false"
+        @playbackError="recoveryNeeded = true"
         @playTimeChange="$emit('playTimeChange', $event)"
         @playStatusChange="$emit('playStatusChange', $event)"
       />
@@ -42,6 +51,7 @@
 import jessibucaPlayer from './jessibuca.vue'
 import rtcPlayer from './rtcPlayer.vue'
 import h265web from './h265web.vue'
+import { getAutoPlayTasks } from '@/api/autoPlay'
 
 export default {
   name: 'PlayerTabs',
@@ -54,6 +64,13 @@ export default {
   data() {
     return {
       streamInfo: null,
+      manualPaused: false,
+      recoveryNeeded: false,
+      recoveryBusy: false,
+      recoveryTimer: null,
+      streamAttachedAt: 0,
+      previewRetryAt: 0,
+      disposed: false,
       activePlayer: 'jessibuca',
       player: { jessibuca: ['ws_flv', 'wss_flv'], webRTC: ['rtc', 'rtcs'], h265web: ['ws_flv', 'wss_flv'] },
       allPlayerList: [
@@ -71,12 +88,28 @@ export default {
       return this.playerList.length
     }
   },
+  mounted() { this.recoveryTimer = setInterval(() => this.recoverPreview(), 10000) },
+  beforeDestroy() { this.disposed = true; clearInterval(this.recoveryTimer) },
   created() {
     if (this.playerCount === 1) {
       this.activePlayer = this.playerList[0].key
     }
   },
   methods: {
+    async recoverPreview() {
+      if (this.disposed || !this.streamInfo || this.manualPaused || this.recoveryBusy || Date.now() < this.previewRetryAt) return
+      const attached = this.streamAttachedAt
+      this.recoveryBusy = true
+      try {
+        const tasks = await getAutoPlayTasks()
+        if (this.disposed || this.manualPaused || attached !== this.streamAttachedAt) return
+        const task = tasks.find(item => item.enabled && item.status === 'PLAYING' && item.streamId === this.streamInfo.stream && (!item.app || item.app === this.streamInfo.app))
+        if (!task || (!this.recoveryNeeded && task.lastSuccessTime <= attached)) return
+        const data = await this.$store.dispatch('commonChanel/playChannel', task.channelId)
+        if (this.disposed || this.manualPaused || attached !== this.streamAttachedAt) return
+        this.setStreamInfo(data.transcodeStream || data)
+      } catch (error) { this.previewRetryAt = Date.now() + 30000 } finally { this.recoveryBusy = false }
+    },
     getPlayerList() {
       return this.playerList
     },
@@ -103,6 +136,9 @@ export default {
       this.$emit('player-changed', this.activePlayer)
     },
     setStreamInfo(streamInfo) {
+      this.manualPaused = false
+      this.recoveryNeeded = false
+      this.streamAttachedAt = Date.now()
       this.streamInfo = streamInfo
       this.play()
     },
@@ -119,16 +155,19 @@ export default {
       this.$emit('playerChanged', { playUrl, playerUrl })
     },
     stop() {
+      this.manualPaused = true
       if (this.$refs[this.activePlayer]) {
         this.$refs[this.activePlayer].pause()
       }
     },
     pause() {
+      this.manualPaused = true
       if (this.$refs[this.activePlayer]) {
         this.$refs[this.activePlayer].pause()
       }
     },
     destroy() {
+      this.manualPaused = true
       const player = this.$refs[this.activePlayer]
       if (player && player.destroy) {
         player.destroy()

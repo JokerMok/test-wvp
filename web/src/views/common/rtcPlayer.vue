@@ -1,6 +1,6 @@
 <template>
   <div :id="'rtcPlayer-' + _uid" class="rtc-player-wrapper">
-    <video :id="'webRtcPlayerBox-' + _uid" class="rtc-player-video" :controls="showControls" autoplay style="text-align:left;">
+    <video :id="'webRtcPlayerBox-' + _uid" class="rtc-player-video" :controls="showControls" @pause="nativePause" @play="$emit('manualResume')" autoplay style="text-align:left;">
       Your browser is too old which doesn't support HTML5 video.
     </video>
   </div>
@@ -20,7 +20,9 @@ export default {
   },
   data() {
     return {
-      timer: null
+      timer: null,
+      playGeneration: 0,
+      stopped: false
     }
   },
   mounted() {},
@@ -29,10 +31,13 @@ export default {
     this.pause()
   },
   methods: {
+    nativePause() { const video = this.getVideoElement(); if (!this.programmaticPause && video && video.srcObject && video.paused) this.$emit('manualPause') },
     play: function(url) {
       if (webrtcPlayer[this._uid]) {
         this.pause()
       }
+      this.stopped = false
+      const generation = ++this.playGeneration
       webrtcPlayer[this._uid] = new ZLMRTCClient.Endpoint({
         element: document.getElementById('webRtcPlayerBox-' + this._uid),
         debug: true,
@@ -56,11 +61,13 @@ export default {
       })
 
       player.on(ZLMRTCClient.Events.WEBRTC_OFFER_ANWSER_EXCHANGE_FAILED, (e) => {
+        if (this.stopped || generation !== this.playGeneration) return
         console.error('offer anwser 交换失败', e)
         this.eventcallbacK('OFFER ANSWER ERROR ', 'offer anwser 交换失败')
         if (e.code == -400 && e.msg == '流不存在') {
           console.log('流不存在')
           this.timer = setTimeout(() => {
+            if (this.stopped || generation !== this.playGeneration) return
             player.close()
             this.play(url)
           }, 100)
@@ -72,6 +79,11 @@ export default {
       })
     },
     pause: function() {
+      clearTimeout(this.timer)
+      this.stopped = true
+      this.playGeneration++
+      this.programmaticPause = true
+      setTimeout(() => { this.programmaticPause = false }, 0)
       if (webrtcPlayer[this._uid]) {
         webrtcPlayer[this._uid].close()
         webrtcPlayer[this._uid] = null
@@ -81,6 +93,7 @@ export default {
       this.pause()
     },
     eventcallbacK: function(type, message) {
+      if (type.includes('ERROR')) this.$emit('playbackError')
       console.log('player 事件回调')
       console.log(type)
       console.log(message)

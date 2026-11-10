@@ -44,6 +44,7 @@ public class LogChannel {
 
     @OnError
     public void onError(Throwable throwable) throws IOException {
+        CHANNELS.remove(this.session.getId());
         log.info("[Web-Log] 连接错误: id={}, err= {}", this.session.getId(), throwable.getMessage());
         if (this.session.isOpen()) {
             this.session.close(new CloseReason(CloseReason.CloseCodes.UNEXPECTED_CONDITION, throwable.getMessage()));
@@ -56,9 +57,20 @@ public class LogChannel {
      * @param message
      */
     public static void push(String message) {
-        CHANNELS.values().stream().forEach(endpoint -> {
-            if (endpoint.session.isOpen()) {
-                endpoint.session.getAsyncRemote().sendText(message);
+        CHANNELS.forEach((id, endpoint) -> {
+            if (!endpoint.session.isOpen()) { CHANNELS.remove(id, endpoint); return; }
+            try {
+                endpoint.session.getAsyncRemote().setSendTimeout(5000);
+                endpoint.session.getAsyncRemote().sendText(message, result -> {
+                    if (!result.isOK()) {
+                        CHANNELS.remove(id, endpoint);
+                        try { endpoint.session.close(); } catch (IOException ignored) { }
+                    }
+                });
+            } catch (Exception ignored) {
+                // Do not log through this appender again for a broken client.
+                CHANNELS.remove(id, endpoint);
+                try { endpoint.session.close(); } catch (IOException ignoredClose) { }
             }
         });
     }

@@ -66,6 +66,9 @@
             </el-dropdown-menu>
           </el-dropdown>
         </el-form-item>
+        <el-form-item v-if="$store.getters.authority === 0">
+          <el-button type="primary" plain @click="$refs.autoPlayDialog.open()">自动续播</el-button>
+        </el-form-item>
         <el-form-item style="float: right;">
           <el-button icon="el-icon-refresh-right" circle @click="refresh()" title="刷新表格"/>
         </el-form-item>
@@ -74,12 +77,13 @@
         ref="channelListTable"
         size="small"
         :data="channelList"
+        row-key="gbId"
         height="calc(100% - 64px)"
         style="width: 100%; font-size: 12px;"
         header-row-class-name="table-header"
         @selection-change="handleSelectionChange"
       >
-        <el-table-column type="selection" width="55" />
+        <el-table-column type="selection" width="55" :reserve-selection="true" />
         <el-table-column prop="gbName" label="名称" min-width="180" />
         <el-table-column prop="gbDeviceId" label="编号" min-width="180" />
         <el-table-column prop="gbManufacturer" label="厂家" min-width="100" />
@@ -109,6 +113,14 @@
             </div>
           </template>
         </el-table-column>
+        <el-table-column label="自动续播" width="110">
+          <template slot-scope="scope">
+            <el-tooltip v-if="autoTasks[scope.row.gbId]" :content="autoTasks[scope.row.gbId].lastError || autoStates[autoTasks[scope.row.gbId].status]" placement="top">
+              <el-tag size="small" :type="autoTasks[scope.row.gbId].status === 'PLAYING' ? 'success' : 'info'">{{ autoStates[autoTasks[scope.row.gbId].status] || '等待检查' }}</el-tag>
+            </el-tooltip>
+            <span v-else>关闭</span>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" min-width="210" fixed="right">
           <template v-slot:default="scope">
             <el-button
@@ -121,7 +133,7 @@
             >播放
             </el-button>
             <el-button
-              v-if="!!scope.row.streamId"
+              v-if="!!scope.row.streamId || (autoTasks[scope.row.gbId] && autoTasks[scope.row.gbId].enabled)"
               size="medium"
               icon="el-icon-switch-button"
               type="text"
@@ -171,6 +183,7 @@
       />
     </div>
 
+    <auto-play-dialog ref="autoPlayDialog" :selected-channels="multipleSelection" @updated="loadAutoPlay" />
     <devicePlayer ref="devicePlayer" />
     <audioTalk ref="audioTalk" />
     <ptzConfig v-if="showPtzConfig" :channel-id="ptzConfigChannelId" @close="showPtzConfig = false" />
@@ -183,6 +196,8 @@
 
 <script>
 import devicePlayer from './player.vue'
+import AutoPlayDialog from './autoPlay.vue'
+import { getAutoPlayTasks, autoPlayStates } from '@/api/autoPlay'
 import audioTalk from './audioTalk.vue'
 import ptzConfig from './ptzConfig.vue'
 import Edit from './edit.vue'
@@ -194,6 +209,7 @@ export default {
   components: {
     ChooseGroup,
     devicePlayer,
+    AutoPlayDialog,
     audioTalk,
     ptzConfig,
     ChooseCivilCode,
@@ -260,17 +276,31 @@ export default {
       groupDeviceId: null,
       groupBusiness: null,
 
+      autoTasks: {},
+      autoStates: autoPlayStates,
+      autoTimer: null,
+      autoDisposed: false,
       multipleSelection: []
     }
   },
   mounted() {
+    this.loadAutoPlay()
+    this.autoTimer = setInterval(() => this.loadAutoPlay(), 15000)
     this.initData()
   },
   destroyed() {
+    this.autoDisposed = true
+    clearInterval(this.autoTimer)
     this.$destroy('videojs')
     clearTimeout(this.updateLooper)
   },
   methods: {
+    loadAutoPlay() {
+      getAutoPlayTasks().then(tasks => {
+        if (this.autoDisposed) return
+        const map = {}; tasks.forEach(task => { map[task.channelId] = task }); this.autoTasks = map
+      }).catch(() => {})
+    },
     handleSelectionChange: function(val) {
       this.multipleSelection = val
     },
@@ -350,6 +380,7 @@ export default {
     },
     stopDevicePush: function(itemData) {
       this.$store.dispatch('commonChanel/stopPlayChannel', itemData.gbId).then(data => {
+        this.loadAutoPlay()
         this.initData()
       }).catch((error) => {
         if (error.response.status === 402) { // 已经停止过

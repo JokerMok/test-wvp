@@ -94,6 +94,14 @@ public class HookSubscribe {
         allHook.remove(hook.toString());
     }
 
+    public boolean removeSubscribe(Hook hook, Event expected) {
+        if (allSubscribes.remove(hook.toString(), expected)) {
+            allHook.remove(hook.toString(), hook);
+            return true;
+        }
+        return false;
+    }
+
     /**
      * 对订阅数据进行过期清理
      */

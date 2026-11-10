@@ -301,26 +301,37 @@ public class RtpServerServiceImpl implements IReceiveRtpServerService {
             return -1;
         }
 
-        // 设置流超时的定时任务
-        String timeOutTaskKey = String.format("%s_%s_%s_%s", TIMEOUT_TASK_KEY_PREFIX, rtpServerParam.getMediaServer().getId(), rtpServerParam.getApp(), rtpServerParam.getStreamId());
-
-        Hook rtpHook = Hook.getInstance(HookType.on_media_arrival, rtpServerParam.getApp(), rtpServerParam.getStreamId(), rtpServerParam.getMediaServer().getId());
-        dynamicTask.startDelay(timeOutTaskKey, () -> {
-            // 收流超时
-            // 关闭收流端口
-            String closeStreamId = rtpServerParam.getMediaServer().isRtpEnable()
-                    ? String.format("%08x", rtpServerParam.getSsrc()).toUpperCase() : rtpServerParam.getStreamId();
-            mediaServerService.closeRTPServer(rtpServerParam.getMediaServer(), rtpServerParam.getApp(), closeStreamId);
-            subscribe.removeSubscribe(rtpHook);
-            callback.run(InviteErrorCode.ERROR_FOR_STREAM_TIMEOUT.getCode(), InviteErrorCode.ERROR_FOR_STREAM_TIMEOUT.getMsg(), null);
-        }, userSetting.getPlayTimeout());
-        // 开启流到来的监听
-        subscribe.addSubscribe(rtpHook, (hookData) -> {
+        // Each attempt has its own timer; a late cleanup cannot cancel the next attempt.
+        String timeOutTaskKey = String.format("%s_%s_%s_%s_%s", TIMEOUT_TASK_KEY_PREFIX,
+                rtpServerParam.getMediaServer().getId(), rtpServerParam.getApp(),
+                rtpServerParam.getStreamId(), java.util.UUID.randomUUID());
+        Hook rtpHook = Hook.getInstance(HookType.on_media_arrival, rtpServerParam.getApp(),
+                rtpServerParam.getStreamId(), rtpServerParam.getMediaServer().getId());
+        java.util.concurrent.atomic.AtomicBoolean finished = new java.util.concurrent.atomic.AtomicBoolean();
+        java.util.concurrent.atomic.AtomicReference<HookSubscribe.Event> listener = new java.util.concurrent.atomic.AtomicReference<>();
+        listener.set(hookData -> {
+            if (!finished.compareAndSet(false, true)) return;
             dynamicTask.stop(timeOutTaskKey);
-            // hook响应
+            subscribe.removeSubscribe(rtpHook, listener.get());
             callback.run(InviteErrorCode.SUCCESS.getCode(), InviteErrorCode.SUCCESS.getMsg(), hookData);
-            subscribe.removeSubscribe(rtpHook);
         });
+        subscribe.addSubscribe(rtpHook, listener.get());
+        dynamicTask.startDelay(timeOutTaskKey, () -> {
+            if (!finished.compareAndSet(false, true)) return;
+            subscribe.removeSubscribe(rtpHook, listener.get());
+            // Notify waiters before a potentially slow ZLM cleanup request.
+            try {
+                callback.run(InviteErrorCode.ERROR_FOR_STREAM_TIMEOUT.getCode(), InviteErrorCode.ERROR_FOR_STREAM_TIMEOUT.getMsg(), null);
+            } finally {
+                try {
+                    String closeStreamId = rtpServerParam.getMediaServer().isRtpEnable() && rtpServerParam.getSsrc() != null
+                            ? String.format("%08x", rtpServerParam.getSsrc()).toUpperCase() : rtpServerParam.getStreamId();
+                    mediaServerService.closeRTPServer(rtpServerParam.getMediaServer(), rtpServerParam.getApp(), closeStreamId);
+                } catch (Exception e) {
+                    log.warn("[点播超时清理] 关闭旧收流端口失败，等待者已收到超时结果", e);
+                }
+            }
+        }, userSetting.getPlayTimeout());
 
         int rtpServerPort;
         if (rtpServerParam.getMediaServer().isRtpEnable()) {

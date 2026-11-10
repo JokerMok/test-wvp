@@ -21,6 +21,18 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(org.springframework.web.context.request.async.AsyncRequestTimeoutException.class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    public WVPResult<String> asyncTimeout(jakarta.servlet.http.HttpServletRequest request) {
+        log.warn("[异步请求超时] path={}, channelId={}", request.getRequestURI(), request.getAttribute("wvp.channelId"));
+        return WVPResult.fail(503, "请求等待结果超时，请稍后重试");
+    }
+
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ResponseEntity<WVPResult<String>> statusError(org.springframework.web.server.ResponseStatusException e) {
+        return ResponseEntity.status(e.getStatusCode()).body(WVPResult.fail(e.getStatusCode().value(), e.getReason()));
+    }
+
     /**
      * 默认异常处理
      * @param e 异常

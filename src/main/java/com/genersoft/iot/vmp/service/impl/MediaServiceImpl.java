@@ -27,6 +27,10 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class MediaServiceImpl implements IMediaService {
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.genersoft.iot.vmp.gb28181.service.impl.AutoPlayPolicy autoPlayPolicy;
+
+
     private final IRedisCatchStorage redisCatchStorage;
 
     private final IStreamProxyService streamProxyService;
@@ -117,6 +121,7 @@ public class MediaServiceImpl implements IMediaService {
 
     @Override
     public boolean closeStreamOnNoneReader(String mediaServerId, String app, String stream, String schema) {
+        if (autoPlayPolicy.keepAlive(mediaServerId, app, stream)) return false;
         if (recordPlanService.recording(app, stream) != null) {
             return false;
         }

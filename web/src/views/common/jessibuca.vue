@@ -7,9 +7,9 @@
     >
       <div id="buttonsBox" class="buttons-box" v-if="showButton === undefined || showButton" :style="{ opacity: showBar ? 1 : 0, pointerEvents: showBar ? 'auto' : 'none' }">
         <div class="buttons-box-left">
-          <i v-if="!playing" class="iconfont icon-play jessibuca-btn" @click="playBtnClick" />
-          <i v-if="playing" class="iconfont icon-pause jessibuca-btn" @click="pause" />
-          <i class="iconfont icon-stop jessibuca-btn" @click="stop" />
+          <i v-if="!playing" class="iconfont icon-play jessibuca-btn" @click="resumeByUser" />
+          <i v-if="playing" class="iconfont icon-pause jessibuca-btn" @click="pauseByUser" />
+          <i class="iconfont icon-stop jessibuca-btn" @click="stopByUser" />
           <i v-if="isNotMute" class="iconfont icon-audio-high jessibuca-btn" @click="mute()" />
           <i v-if="!isNotMute" class="iconfont icon-audio-mute jessibuca-btn" @click="cancelMute()" />
         </div>
@@ -22,7 +22,7 @@
             style="font-size: 1rem !important"
             @click="screenshot"
           />
-          <i class="iconfont icon-shuaxin11 jessibuca-btn" @click="playBtnClick" />
+          <i class="iconfont icon-shuaxin11 jessibuca-btn" @click="resumeByUser" />
           <i v-if="!fullscreen" class="iconfont icon-weibiaoti10 jessibuca-btn" @click="fullscreenSwich" />
           <i v-if="fullscreen" class="iconfont icon-weibiaoti11 jessibuca-btn" @click="fullscreenSwich" />
         </div>
@@ -73,6 +73,9 @@ export default {
     this.playerTime = 0
   },
   methods: {
+    stopByUser() { this.$emit('manualPause'); this.stop() },
+    pauseByUser() { this.$emit('manualPause'); this.pause() },
+    resumeByUser() { this.$emit('manualResume'); this.playBtnClick() },
     create() {
       if (jessibucaPlayer[this._uid]) {
         jessibucaPlayer[this._uid].destroy()
@@ -168,15 +171,19 @@ export default {
         console.log('Jessibuca -> audioInfo: ', msg)
       })
       jessibuca.on('error', (msg) => {
+        this.$emit('playbackError')
         console.log('Jessibuca -> error: ', msg)
       })
       jessibuca.on('timeout', (msg) => {
+        this.$emit('playbackError')
         console.log('Jessibuca -> timeout: ', msg)
       })
       jessibuca.on('loadingTimeout', (msg) => {
+        this.$emit('playbackError')
         console.log('Jessibuca -> timeout: ', msg)
       })
       jessibuca.on('delayTimeout', (msg) => {
+        this.$emit('playbackError')
         console.log('Jessibuca -> timeout: ', msg)
       })
       jessibuca.on('playToRenderTimes', (msg) => {

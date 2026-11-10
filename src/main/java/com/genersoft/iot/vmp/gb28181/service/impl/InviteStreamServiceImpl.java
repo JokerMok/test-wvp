@@ -25,13 +25,60 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
+import com.genersoft.iot.vmp.service.bean.InviteErrorCode;
 
 @Slf4j
 @Service
 public class InviteStreamServiceImpl implements IInviteStreamService {
 
-    private final Map<String, List<ErrorCallback<StreamInfo>>> inviteErrorCallbackMap = new ConcurrentHashMap<>();
+    private java.util.function.LongSupplier clock = System::currentTimeMillis;
+
+    private final Map<String, Pending> inviteErrorCallbackMap = new ConcurrentHashMap<>();
+
+    private static final class Pending {
+        final String token = UUID.randomUUID().toString();
+        final long deadline;
+        final Integer playChannelId;
+        final List<ErrorCallback<StreamInfo>> callbacks = new CopyOnWriteArrayList<>();
+        Pending(long deadline, Integer playChannelId) { this.deadline = deadline; this.playChannelId = playChannelId; }
+    }
+
+    private void notifyCallbacks(Pending pending, int code, String msg, StreamInfo data) {
+        for (ErrorCallback<StreamInfo> callback : pending.callbacks) {
+            try {
+                if (callback != null) callback.run(code, msg, data);
+            } catch (Exception e) {
+                log.warn("[点播结果通知] 单个等待者回调失败，其他等待者继续处理", e);
+            }
+        }
+    }
+
+    private void clearFailedPlay(Pending pending) {
+        if (pending.playChannelId == null) return;
+        try { removeInviteInfoByDeviceAndChannel(InviteSessionType.PLAY, pending.playChannelId); }
+        catch (Exception e) { log.warn("[点播在途清理] 缓存清理失败，仍释放内存等待状态，channelId={}", pending.playChannelId, e); }
+    }
+
+    private void expire(String key, Pending pending) {
+        AtomicReference<Pending> expired = new AtomicReference<>();
+        inviteErrorCallbackMap.computeIfPresent(key, (k, current) -> {
+            if (current != pending || pending.deadline > clock.getAsLong()) return current;
+            clearFailedPlay(current);
+            expired.set(current);
+            return null;
+        });
+        if (expired.get() != null) {
+            log.warn("[点播在途超时释放] key={}, attempt={}", key, pending.token);
+            notifyCallbacks(pending, InviteErrorCode.ERROR_FOR_STREAM_TIMEOUT.getCode(), "点播等待视频流超时，请重试", null);
+        }
+    }
+
+    @Scheduled(fixedDelay = 1000)
+    public void expirePendingInvites() {
+        inviteErrorCallbackMap.forEach(this::expire);
+    }
 
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
@@ -243,28 +290,95 @@ public class InviteStreamServiceImpl implements IInviteStreamService {
     @Override
     public void once(InviteSessionType type, Integer channelId, String stream, ErrorCallback<StreamInfo> callback) {
         String key = buildKey(type, channelId, stream);
-        List<ErrorCallback<StreamInfo>> callbacks = inviteErrorCallbackMap.computeIfAbsent(key, k -> new CopyOnWriteArrayList<>());
-        callbacks.add(callback);
-
+        inviteErrorCallbackMap.compute(key, (k, current) -> {
+            Pending pending = current != null ? current : new Pending(Long.MAX_VALUE, null);
+            if (callback != null) pending.callbacks.add(callback);
+            return pending;
+        });
     }
 
     @Override
     public boolean onceAndFirst(InviteSessionType type, Integer channelId, String stream, ErrorCallback<StreamInfo> callback) {
+        return claim(type, channelId, stream, callback).owner();
+    }
+
+    @Override
+    public Attempt claim(InviteSessionType type, Integer channelId, String stream, ErrorCallback<StreamInfo> callback) {
         String key = buildKey(type, channelId, stream);
-        AtomicBoolean first = new AtomicBoolean(false);
-        inviteErrorCallbackMap.computeIfAbsent(key, k -> {
-            first.set(true);
-            List<ErrorCallback<StreamInfo>> callbacks = new CopyOnWriteArrayList<>();
-            callbacks.add(callback);
-            return callbacks;
+        Pending previous = inviteErrorCallbackMap.get(key);
+        if (previous != null) expire(key, previous);
+        AtomicReference<Attempt> result = new AtomicReference<>();
+        inviteErrorCallbackMap.compute(key, (k, current) -> {
+            boolean owner = current == null;
+            Pending pending = owner ? new Pending(clock.getAsLong() + Math.max(1000, userSetting.getPlayTimeout()) + 1000L, type == InviteSessionType.PLAY ? channelId : null) : current;
+            if (callback != null) pending.callbacks.add(callback);
+            result.set(new Attempt(key, pending.token, owner));
+            return pending;
         });
-        if (!first.get()) {
-            List<ErrorCallback<StreamInfo>> callbacks = inviteErrorCallbackMap.get(key);
-            if (callbacks != null) {
-                callbacks.add(callback);
-            }
-        }
-        return first.get();
+        return result.get();
+    }
+
+    @Override
+    public boolean isCurrent(Attempt attempt) {
+        Pending pending = inviteErrorCallbackMap.get(attempt.key());
+        return pending != null && pending.token.equals(attempt.token());
+    }
+
+    @Override
+    public boolean runIfCurrent(Attempt attempt, Runnable action) {
+        java.util.concurrent.atomic.AtomicBoolean ran = new java.util.concurrent.atomic.AtomicBoolean();
+        inviteErrorCallbackMap.computeIfPresent(attempt.key(), (key, pending) -> {
+            if (!pending.token.equals(attempt.token())) return pending;
+            action.run();
+            ran.set(true);
+            return pending;
+        });
+        return ran.get();
+    }
+
+    @Override
+    public boolean complete(Attempt attempt, int code, String msg, StreamInfo data) {
+        AtomicReference<Pending> completed = new AtomicReference<>();
+        inviteErrorCallbackMap.computeIfPresent(attempt.key(), (key, pending) -> {
+            if (!pending.token.equals(attempt.token())) return pending;
+            if (code != InviteErrorCode.SUCCESS.getCode()) clearFailedPlay(pending);
+            completed.set(pending);
+            return null;
+        });
+        if (completed.get() == null) return false;
+        notifyCallbacks(completed.get(), code, msg, data);
+        return true;
+    }
+
+    @Override
+    public boolean completeReady(Attempt attempt, java.util.function.Supplier<StreamInfo> ready) {
+        AtomicReference<Pending> completed = new AtomicReference<>();
+        AtomicReference<StreamInfo> data = new AtomicReference<>();
+        inviteErrorCallbackMap.computeIfPresent(attempt.key(), (key, pending) -> {
+            if (!pending.token.equals(attempt.token())) return pending;
+            try { data.set(ready.get()); }
+            catch (Exception e) { log.warn("[点播就绪处理] 处理失败，key={}", key, e); }
+            if (data.get() == null) clearFailedPlay(pending);
+            completed.set(pending);
+            return null;
+        });
+        if (completed.get() == null) return false;
+        int code = data.get() == null ? InviteErrorCode.ERROR_FOR_STREAM_PARSING_EXCEPTIONS.getCode() : InviteErrorCode.SUCCESS.getCode();
+        notifyCallbacks(completed.get(), code, data.get() == null ? "视频流就绪处理失败" : "success", data.get());
+        return true;
+    }
+
+    @Override
+    public boolean isPlayPending(Integer channelId) {
+        String key = buildKey(InviteSessionType.PLAY, channelId, null);
+        Pending pending = inviteErrorCallbackMap.get(key);
+        if (pending != null) expire(key, pending);
+        return inviteErrorCallbackMap.containsKey(key);
+    }
+
+    @Override
+    public void cancelPlay(Integer channelId, String reason) {
+        call(InviteSessionType.PLAY, channelId, null, InviteErrorCode.ERROR_FOR_STREAM_TIMEOUT.getCode(), reason, null);
     }
 
     private String buildKey(InviteSessionType type, Integer channelId, String stream) {
@@ -313,15 +427,8 @@ public class InviteStreamServiceImpl implements IInviteStreamService {
     @Override
     public void call(InviteSessionType type, Integer channelId, String stream, int code, String msg, StreamInfo data) {
         String key = buildSubStreamKey(type, channelId, stream);
-        List<ErrorCallback<StreamInfo>> callbacks = inviteErrorCallbackMap.remove(key);
-        if (callbacks == null || callbacks.isEmpty()) {
-            return;
-        }
-        for (ErrorCallback<StreamInfo> callback : callbacks) {
-            if (callback != null) {
-                callback.run(code, msg, data);
-            }
-        }
+        Pending pending = inviteErrorCallbackMap.remove(key);
+        if (pending != null) notifyCallbacks(pending, code, msg, data);
     }
 
 

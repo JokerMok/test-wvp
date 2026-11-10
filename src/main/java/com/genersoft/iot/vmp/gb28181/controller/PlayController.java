@@ -71,6 +71,9 @@ public class PlayController {
 	@Autowired
 	private UserSetting userSetting;
 
+    @Autowired
+    private com.genersoft.iot.vmp.gb28181.service.impl.AutoPlayPolicy autoPlayPolicy;
+
 	@Autowired
 	private IDeviceService deviceService;
 
@@ -93,7 +96,7 @@ public class PlayController {
 		DeviceChannel channel = deviceChannelService.getOne(deviceId, channelId);
 		Assert.notNull(channel, "通道不存在");
 
-		DeferredResult<WVPResult<StreamContent>> result = new DeferredResult<>(userSetting.getPlayTimeout().longValue());
+		DeferredResult<WVPResult<StreamContent>> result = new DeferredResult<>(userSetting.getPlayTimeout().longValue() + 5000L);
 
 		result.onTimeout(()->{
 			log.info("[点播等待超时] deviceId：{}, channelId：{}, ", deviceId, channelId);
@@ -103,8 +106,6 @@ public class PlayController {
 			wvpResult.setMsg("点播超时");
 			result.setResult(wvpResult);
 
-			inviteStreamService.removeInviteInfoByDeviceAndChannel(InviteSessionType.PLAY, channel.getId());
-			deviceChannelService.stopPlay(channel.getId());
 		});
 
 		ErrorCallback<StreamInfo> callback  = (code, msg, streamInfo) -> {
@@ -160,7 +161,10 @@ public class PlayController {
 		Assert.notNull(device, "设备不存在");
 		Assert.notNull(channel, "通道不存在");
 		String streamId = String.format("%s_%s", device.getDeviceId(), channel.getDeviceId());
-		playService.stop(InviteSessionType.PLAY, device, channel, streamId);
+        autoPlayPolicy.manualStop(channel.getGbId(), () -> {
+            inviteStreamService.cancelPlay(channel.getId(), "人工停止点播");
+            playService.stop(InviteSessionType.PLAY, device, channel, streamId);
+        });
 		JSONObject json = new JSONObject();
 		json.put("deviceId", deviceId);
 		json.put("channelId", channelId);

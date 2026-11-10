@@ -1,180 +1,80 @@
 <template>
-  <div id="log" style="height: 100%">
+  <div class="log-panel" style="height:100%">
     <el-form :inline="true" size="mini">
-      <el-form-item label="过滤">
-        <el-input v-model="filter" size="mini" placeholder="请输入过滤关键字" style="width: 20vw" />
-      </el-form-item>
-      <el-form-item style="float: right;">
-        <el-button size="mini" icon="el-icon-download" @click="downloadFile()">下载</el-button>
-      </el-form-item>
+      <el-form-item label="过滤"><el-input v-model="filter" placeholder="过滤关键字" style="width:20vw" /></el-form-item>
+      <el-form-item v-if="remoteUrl"><el-tag :type="connectionState === '已连接' ? 'success' : 'info'">{{ connectionState }}</el-tag></el-form-item>
+      <el-form-item v-if="remoteUrl"><el-button @click="reconnect">重新连接</el-button></el-form-item>
+      <el-form-item style="float:right"><el-button icon="el-icon-download" @click="downloadFile">下载</el-button></el-form-item>
     </el-form>
-    <log-viewer :log="logData" :auto-scroll="true" :height="winHeight" style="height: calc(100% - 60px);" />
+    <log-viewer :log="logData" :auto-scroll="true" :height="winHeight" style="height:calc(100% - 60px)" />
   </div>
 </template>
-
 <script>
-
 import moment from 'moment/moment'
 import logViewer from '@femessage/log-viewer'
 import stripAnsi from 'strip-ansi'
 import request from '@/utils/request'
-
+import { getToken } from '@/utils/auth'
 export default {
-  name: 'Log',
-  components: { logViewer },
-  props: ['fileUrl', 'remoteUrl', 'loadEnd'],
-  data() {
-    return {
-      loading: true,
-      winHeight: window.innerHeight - 100,
-      data: [],
-      filter: '',
-      logData: '',
-      websocket: null,
-      destroyedCallback: null
-    }
-  },
-  watch: {
-    remoteUrl(newValue) {
-      console.log(newValue)
-      this.remoteUrl = newValue
-      this.initData()
-    },
-    fileUrl(newValue) {
-      this.fileUrl = newValue
-      this.initData()
-    },
-    filter(newValue) {
-      this.filter = newValue
-      this.logData = this.getLogData()
-    },
-    data(newValue) {
-      this.data = newValue
-      this.logData = this.getLogData()
-    }
-  },
-  created() {
-    this.data = []
-    if (this.fileUrl || this.remoteUrl) {
-      this.initData()
-    }
-  },
-  destroyed() {
-    console.log('destroyed')
-    if (this.destroyedCallback) {
-      this.destroyedCallback()
-    }
-  },
+  name: 'Log', components: { logViewer }, props: ['fileUrl', 'remoteUrl', 'loadEnd'],
+  data() { return { data: [], filter: '', websocket: null, retryTimer: null, retryCount: 0, disposed: false, generation: 0, connectionState: '未连接', winHeight: window.innerHeight - 100 } },
+  computed: { logData() { return this.data.filter(line => !this.filter || line.includes(this.filter)).join('\r\n') } },
+  watch: { remoteUrl() { this.initData() }, fileUrl() { this.initData() } },
+  created() { this.initData() },
+  beforeDestroy() { this.disposed = true; this.disconnect() },
   methods: {
-    initData: function() {
-      this.loading = true
-      this.data = []
-      console.log(this.loading)
+    disconnect() {
+      this.generation++
+      clearTimeout(this.retryTimer)
+      if (this.websocket) { this.websocket.onclose = null; this.websocket.onmessage = null; this.websocket.onerror = null; this.websocket.close(); this.websocket = null }
+    },
+    initData() {
+      this.disconnect(); this.data = []
       if (this.fileUrl) {
-        request({
-          method: 'get',
-          url: this.fileUrl
-        }).then((res) => {
-          const dataArray = res.split('\n')
-          dataArray.forEach(item => {
-            this.data.push(item)
-          })
-          this.loading = false
-          if (this.loadEnd && typeof this.loadEnd === 'function') {
-            this.loadEnd()
-          }
-        }).catch((error) => {
-          console.log(error)
-        })
-      } else if (this.remoteUrl) {
-        console.log('remoteUrl' + this.remoteUrl)
-        console.log(window.location.host)
-        window.websocket = new WebSocket(this.remoteUrl, this.$store.getters.token)
-        window.websocket.onclose = e => {
-          console.log(`conn closed: code=${e.code}, reason=${e.reason}, wasClean=${e.wasClean}`)
-        }
-        window.websocket.onmessage = e => {
-          this.loading = false
-          this.data.push(e.data)
-        }
-        window.websocket.onerror = e => {
-          console.log(`conn err`)
-          console.error(e)
-        }
-        window.websocket.onopen = e => {
-          console.log(`conn open: ${e}`)
-          this.destroyedCallback = () => {
-            window.websocket.close()
-          }
-        }
+        const generation = this.generation
+        request({ method: 'get', url: this.fileUrl }).then(res => {
+          if (this.disposed || generation !== this.generation) return
+          this.data = String(res).split('\n')
+          if (typeof this.loadEnd === 'function') this.loadEnd()
+        }).catch(() => { this.connectionState = '日志读取失败' })
+      } else if (this.remoteUrl) this.connect()
+    },
+    connect() {
+      if (this.disposed || !this.remoteUrl) return
+      const token = getToken()
+      if (!token) { this.connectionState = '请重新登录'; return }
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+        if (payload.exp && payload.exp * 1000 <= Date.now()) { this.connectionState = '请重新登录'; return }
+      } catch (error) { this.connectionState = '登录凭证无效，请重新登录'; return }
+      const generation = this.generation
+      this.connectionState = '连接中'
+      let socket
+      try { socket = new WebSocket(this.remoteUrl, token) } catch (error) { this.connectionState = '日志连接失败，请重新登录'; return }
+      this.websocket = socket
+      socket.onopen = () => { if (generation !== this.generation || this.disposed) return; this.retryCount = 0; this.connectionState = '已连接' }
+      socket.onmessage = event => {
+        if (generation !== this.generation || this.disposed) return
+        this.data.push(...String(event.data).split('\n'))
+        if (this.data.length > 2000) this.data.splice(0, this.data.length - 2000)
+      }
+      socket.onerror = () => { if (generation === this.generation) this.connectionState = '连接异常，检查登录状态及日志权限' }
+      socket.onclose = event => {
+        if (this.disposed || generation !== this.generation) return
+        this.websocket = null
+        if (event.code === 1008 || !getToken()) { this.connectionState = '请重新登录'; return }
+        this.connectionState = '连接断开，等待重连'
+        const delay = [2000, 5000, 10000, 30000][Math.min(this.retryCount++, 3)]
+        this.retryTimer = setTimeout(() => this.connect(), delay)
       }
     },
-    getLogData: function() {
-      this.loading = true
-      if (this.data.length === 0) {
-        this.loading = false
-        return ''
-      } else {
-        let result = ''
-        for (let i = 0; i < this.data.length; i++) {
-          if (this.filter.length === 0) {
-            result += this.data[i] + '\r\n'
-          } else {
-            if (this.data[i].indexOf(this.filter) > -1) {
-              result += this.data[i] + '\r\n'
-            }
-          }
-        }
-        this.loading = false
-        return result
-      }
-    },
-    getLogDataWithOutAnsi: function() {
-      if (this.data.length === 0) {
-        return ''
-      } else {
-        let result = ''
-        for (let i = 0; i < this.data.length; i++) {
-          if (this.filter.length === 0) {
-            result += stripAnsi(this.data[i]) + '\r\n'
-          } else {
-            if (this.data[i].indexOf(this.filter) > -1) {
-              result += stripAnsi(this.data[i]) + '\r\n'
-            }
-          }
-        }
-        return result
-      }
-    },
+    reconnect() { this.disconnect(); this.retryCount = 0; this.connect() },
+    getLogData() { return this.logData },
+    getLogDataWithOutAnsi() { return stripAnsi(this.logData) },
     downloadFile() {
-      const blob = new Blob([this.getLogDataWithOutAnsi()], {
-        type: 'text/plain;charset=utf-8'
-      })
-      const reader = new FileReader()
-      reader.readAsDataURL(blob)
-      reader.onload = (e) => {
-        const a = document.createElement('a')
-        a.download = `wvp-${this.filter}-${moment().format('yyyy-MM-DD')}.log`
-        a.href = e.target.result
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-      }
+      const url = URL.createObjectURL(new Blob([this.getLogDataWithOutAnsi()], { type: 'text/plain;charset=utf-8' }))
+      const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'wvp-' + moment().format('YYYY-MM-DD-HH-mm-ss') + '.log'; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
     }
   }
 }
 </script>
-
-<style>
-.log-loading{
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  display: inline-block;
-  text-align: center;
-  background-color: transparent;
-  font-size: 20px;
-  color: rgb(255, 255, 255);
-  z-index: 1000;
-}
-</style>

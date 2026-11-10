@@ -54,7 +54,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        if (!userSetting.getInterfaceAuthentication()) {
+        boolean protectedOperation = requestURI.equals("/channel/log") || requestURI.startsWith("/api/common/channel/auto-play");
+        if (!userSetting.getInterfaceAuthentication() && !protectedOperation) {
             UsernamePasswordAuthenticationToken token = new UsernamePasswordAuthenticationToken(null, null, new ArrayList<>() );
             SecurityContextHolder.getContext().setAuthentication(token);
             chain.doFilter(request, response);
@@ -78,6 +79,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (StringUtils.isBlank(jwt)) {
                 jwt = request.getHeader(JwtUtils.getApiKeyHeader());
                 if (StringUtils.isBlank(jwt)) {
+                    if (protectedOperation) { response.setStatus(401); return; }
                     chain.doFilter(request, response);
                     return;
                 }
@@ -90,12 +92,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         switch (jwtUser.getStatus()){
             case EXPIRED:
                 response.setStatus(401);
+                if (protectedOperation) return;
                 chain.doFilter(request, response);
                 // 异常
                 return;
             case EXCEPTION:
                 // 过期
-                response.setStatus(400);
+                response.setStatus(protectedOperation ? 401 : 400);
+                if (protectedOperation) return;
                 chain.doFilter(request, response);
                 return;
             case EXPIRING_SOON:
@@ -115,6 +119,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // 加载真实用户（含 defaultPassword），用于默认密码访问限制
         User dbUser = userService.getUserById(jwtUser.getUserId());
         user.setDefaultPassword(dbUser != null && dbUser.isDefaultPassword());
+        if (protectedOperation && dbUser == null) { response.setStatus(401); return; }
+        if (dbUser != null && dbUser.getRole() != null) user.setRole(dbUser.getRole());
+        if (requestURI.equals("/channel/log") && (user.getRole() == null || !"0".equals(user.getRole().getAuthority()))) {
+            response.setStatus(403); return;
+        }
+
 
         // 默认密码用户：仅允许修改密码与登出接口
         if (user.isDefaultPassword()) {
