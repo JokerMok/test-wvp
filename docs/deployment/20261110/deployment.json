@@ -1,0 +1,67 @@
+{
+  "application_git_sha": "06489f6634aa5375d32bc98cc2f3816f6a279a61",
+  "url": "https://wvp.shizibandu.icu/",
+  "release_archive": "releases/test-wvp-06489f6634aa5375d32bc98cc2f3816f6a279a61.tar.gz",
+  "archive_sha256": "ae4f0f217da54d7837c05b936261fe8ac7318a9ebf40966c225409016799dc1f",
+  "archive_bytes": 124316898,
+  "unpacked_bytes": 152203472,
+  "files": 126,
+  "jar_sha256": "771978cb377d014938ee38a8433dd33c0b2236df1c324ff16e1a9d6edf09a081",
+  "migration_sha256": "033085ed7b84f98cbebce48a59332f84f4689b7678d3aa8652c321b171c9e9c3",
+  "built_at_utc": "2026-11-10T06:04:06.110825+00:00",
+  "deployment": {
+    "deployed": true,
+    "formal_production_deployed": false,
+    "current": "/srv/apps/test-wvp/releases/06489f6634aa5375d32bc98cc2f3816f6a279a61",
+    "previous": "/srv/apps/test-wvp/releases/75f8991a6ca8058ce65a2bc73efeca8ba460c1a0",
+    "backup": "/srv/apps/test-wvp/shared/backups/before-20261110T060659-75f8991a6ca8058ce65a2bc73efeca8ba460c1a0",
+    "configuration_recovery": "/srv/apps/test-wvp/shared/backups/upgrade-20261110-06489f6",
+    "free_bytes_after_deploy": 2359758848,
+    "services": [
+      "test-wvp",
+      "test-wvp-db",
+      "test-wvp-cache",
+      "test-wvp-media"
+    ],
+    "other_service_or_caddy_restarts": false,
+    "media_service_restarted": false
+  },
+  "verification": {
+    "git_sha": "06489f6634aa5375d32bc98cc2f3816f6a279a61",
+    "https_login": true,
+    "login_ttl_seconds": 86400,
+    "auto_play_api": true,
+    "auto_play_tasks_initially": 0,
+    "default_check_interval_seconds": 60,
+    "history_log_files": 5,
+    "wss_anonymous_status": 401,
+    "wss_authenticated_status": 101,
+    "fresh_log_frame_bytes": 99,
+    "device_count": 2,
+    "channel_count": 5,
+    "device_modes": "UDP\t2",
+    "protected_config_changes": [
+      "media/config.ini"
+    ],
+    "rtp_timeout_seconds": 3600,
+    "caddy_configuration_unchanged": true,
+    "public_index_matches_release": true,
+    "current": "/srv/apps/test-wvp/releases/06489f6634aa5375d32bc98cc2f3816f6a279a61",
+    "previous": "/srv/apps/test-wvp/releases/75f8991a6ca8058ce65a2bc73efeca8ba460c1a0",
+    "checked_at_utc": "2026-11-10T06:08:36Z"
+  },
+  "build": {
+    "backend": "Java 21 / Maven 3.9.9 package; 776 Java sources; focused tests reused from the identical 06489f6 source",
+    "frontend": "Node v25.9.0 / npm 11.12.1 production build; dependencies reused with identical package-lock.json",
+    "source_snapshot_retained": false
+  },
+  "acceptance_boundary": "Public login, new log frame, task API/defaults and configuration retention verified; no channel auto-enabled and no live camera disconnect/recovery test performed.",
+  "external_verification": {
+    "https_from_mac": true,
+    "public_index_sha256": "74edc2409c513b0225898fa15e10aa9d86ab4a7e75e21f1a2e49892e42492f13",
+    "public_app_js_path": "/static/js/app.1b4b67b0.js",
+    "public_app_js_sha256": "f238189e4ec2741d2b0382eca6756c308e8d7cc69b2e0d032c7219f61ea598bf",
+    "public_static_assets_match_release": true,
+    "anonymous_auto_play_status": 401
+  }
+}
