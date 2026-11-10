@@ -55,6 +55,9 @@ export default {
       const state = this.playbackState(id)
       return state.autoPlayConfigured ? (state.autoPlayEnabled ? '已开启' : '已暂停') : '关闭'
     },
-    canStopPlayback(id, storedStream) { return this.playbackState(id).canStop || !!storedStream }
+    canStopPlayback(id, storedStream) {
+      const status = this.playbackState(id)
+      return typeof status.canStop === 'boolean' ? status.canStop : !!storedStream
+    }
   }
 }

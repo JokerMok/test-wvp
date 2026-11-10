@@ -56,6 +56,11 @@ async function run() {
   snapshots = [{ channelId: 18, state: 'STOPPED', canStop: true, autoPlayConfigured: true, autoPlayEnabled: true }]
   await common.view.refreshPlaybackStatus();await device.view.refreshPlaybackStatus()
   check(text(common.column('播放状态')) === text(device.column('播放状态')) && text(common.column('播放状态')).includes('未收流'), 'successful empty media updates both pages independently of an enabled task')
+  snapshots = [{ channelId: 18, state: 'STOPPED', canStop: false, autoPlayConfigured: true, autoPlayEnabled: false }]
+  common.row.streamId = 'stale-page-cache'
+  await common.view.refreshPlaybackStatus();await device.view.refreshPlaybackStatus()
+  check(!hasStop(common.column('操作')) && !hasStop(device.column('操作')), 'fresh server state overrides a stale page stream ID for both stop controls')
+  check(common.view.autoPlaybackLabel(18) === '已暂停' && device.view.autoPlaybackLabel(18) === '已暂停', 'manual pause is consistent on both pages')
   let finishOld
   fetch = () => new Promise(resolve => { finishOld = resolve })
   const oldRequest = common.view.refreshPlaybackStatus()
