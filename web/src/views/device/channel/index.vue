@@ -73,6 +73,25 @@
       >
         <el-table-column prop="name" label="名称" min-width="180" />
         <el-table-column prop="deviceId" label="编号" min-width="180" />
+        <el-table-column label="状态" min-width="100">
+          <template v-slot:default="scope">
+            <div slot="reference" class="name-wrapper">
+              <el-tag v-if="scope.row.status === 'ON'" size="medium">在线</el-tag>
+              <el-tag v-if="scope.row.status !== 'ON'" size="medium" type="info">离线</el-tag>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="播放状态" width="110">
+          <template slot-scope="scope">
+            <el-tag size="small" :type="playbackType(scope.row.id)">{{ playbackLabel(scope.row.id) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="自动续播" width="100">
+          <template slot-scope="scope">
+            <el-tag v-if="playbackState(scope.row.id).autoPlayConfigured" size="small" :type="playbackState(scope.row.id).autoPlayEnabled ? 'success' : 'info'">{{ autoPlaybackLabel(scope.row.id) }}</el-tag>
+            <span v-else>{{ autoPlaybackLabel(scope.row.id) }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="快照" min-width="100">
           <template v-slot:default="scope">
             <el-image
@@ -126,25 +145,6 @@
               <el-option label="streamMode:MAIN(主码流-水星+TP-LINK)" value="streamMode:MAIN" />
               <el-option label="streamMode:SUB(子码流-水星+TP-LINK)" value="streamMode:SUB" />
             </el-select>
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" min-width="100">
-          <template v-slot:default="scope">
-            <div slot="reference" class="name-wrapper">
-              <el-tag v-if="scope.row.status === 'ON'" size="medium">在线</el-tag>
-              <el-tag v-if="scope.row.status !== 'ON'" size="medium" type="info">离线</el-tag>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="播放状态" width="110">
-          <template slot-scope="scope">
-            <el-tag size="small" :type="playbackType(scope.row.id)">{{ playbackLabel(scope.row.id) }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="自动续播" width="100">
-          <template slot-scope="scope">
-            <el-tag v-if="playbackState(scope.row.id).autoPlayConfigured" size="small" :type="playbackState(scope.row.id).autoPlayEnabled ? 'success' : 'info'">{{ autoPlaybackLabel(scope.row.id) }}</el-tag>
-            <span v-else>{{ autoPlaybackLabel(scope.row.id) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="操作" min-width="340" fixed="right">
