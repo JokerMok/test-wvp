@@ -2,7 +2,7 @@
 
 ## 自动续播与日志修复（2026-11-10，腾讯云已部署）
 
-腾讯云前后端已更新到 `06489f6634aa5375d32bc98cc2f3816f6a279a61`，包含点播请求释放、实时日志和后台自动续播。默认60秒，人工停止暂停，任务初始全部关闭。新增表已增量创建，现有配置、账号、JWK、两台UDP设备和5条通道保留；登录24小时、RTP超时3600秒已实测回读。公网登录、实时新日志、任务API及版本一致性验证通过，未制造实际摄像头断流；正式环境服务器未更新。发布包、回退及验证范围见 [腾讯云部署记录](docs/deployment/20261110/部署与验证.md)。
+腾讯云已完成入口修复：前端 `f91b3639451b427ae27107363b2d8f18b42ed33a`，后端 `7354a98a627f698b6639b97ea7495c02c1572fc5`。登录和刷新后，管理员在“通道列表”的“批量操作”右侧可见“自动续播”，勾选通道后打开设置。默认60秒、人工停止暂停，当前任务全关。真实Chrome检查入口、刷新、设置和保存暂停通过，配置与UDP不变。正式服务器未更新。详见 [入口修复及界面验证](docs/deployment/20261110/入口修复.md)。
 
 ## 源码更新（2026-11-10）
 
@@ -14,9 +14,9 @@
 
 ## 当前部署
 
-- 2026-11-10 更新 `tencent-main`，前后端均为 WVP 2.7.4 / `06489f6634aa5375d32bc98cc2f3816f6a279a61`。版本以 `current/RELEASE.json` 为准。[源码仓库](https://github.com/JokerMok/test-wvp)
+- 2026-11-10 更新 `tencent-main`，WVP 2.7.4，前端 `f91b3639451b427ae27107363b2d8f18b42ed33a` / 后端 `7354a98a627f698b6639b97ea7495c02c1572fc5`。版本以 `current/RELEASE.json` 为准。[源码仓库](https://github.com/JokerMok/test-wvp)
 - 源码以正式环境归档为基线，纳入 2026-11-05 的 UDP 修订。测试环境使用独立数据库和凭证。来源及原归档校验值见 `SOURCE.md`。
-- 当前完整发布包 SHA-256 为 `ae4f0f217da54d7837c05b936261fe8ac7318a9ebf40966c225409016799dc1f`，在 Mac 的 `releases/test-wvp-06489f6634aa5375d32bc98cc2f3816f6a279a61.tar.gz`；服务器 `current/SHA256SUMS` 覆盖 JAR、初始化与增量SQL和网页。`previous` 保留前端 `75f8991` / 后端 `d1da553` 的上一运行版本。
+- 当前前端发布包为 `releases/test-wvp-f91b3639451b427ae27107363b2d8f18b42ed33a-frontend.tar.gz`，SHA-256 `22b3a45d5150d88e78e01c2fff2febea52b4650a60196ec2ec47c2c6116c1ed3`，复用并校验完整后端包 `releases/test-wvp-7354a98a627f698b6639b97ea7495c02c1572fc5.tar.gz` 的JAR。`previous` 指向 `7354a98a627f698b6639b97ea7495c02c1572fc5`。初始化、迁移、网页和JAR继续由 `current/SHA256SUMS` 校验。
 - 项目目录为 `/srv/apps/test-wvp`。`test-wvp{,-db,-cache,-media}.service` 均已启动并启用开机自启。WVP 使用宿主 Java 21，MySQL 8.4.11 与 Redis 8.0.5 为独立实例。ZLMediaKit 使用官方 `linux/amd64` 镜像 `sha256:f0022a9ebe3085f2710a5a9312975564f22a8c8449be88217b55ce7e3cf9539b` 的校验后运行文件，来源为腾讯云镜像端点。
 
 | 组件 | 服务器地址 |

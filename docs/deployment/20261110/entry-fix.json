@@ -1,0 +1,44 @@
+{
+  "date": "2026-11-10",
+  "frontend_git_sha": "f91b3639451b427ae27107363b2d8f18b42ed33a",
+  "backend_git_sha": "7354a98a627f698b6639b97ea7495c02c1572fc5",
+  "url": "https://wvp.shizibandu.icu/",
+  "release_archive": "releases/test-wvp-f91b3639451b427ae27107363b2d8f18b42ed33a-frontend.tar.gz",
+  "release_sha256": "22b3a45d5150d88e78e01c2fff2febea52b4650a60196ec2ec47c2c6116c1ed3",
+  "backend_base_archive": "releases/test-wvp-7354a98a627f698b6639b97ea7495c02c1572fc5.tar.gz",
+  "browser_before": {
+    "baseline": true,
+    "entryVisible": false,
+    "channelRows": 5
+  },
+  "browser_after": {
+    "passed": true,
+    "browser": "Google Chrome",
+    "administratorEntryVisible": true,
+    "dialogOpens": true,
+    "defaultIntervalSeconds": 60,
+    "selectedChannelEnablesAction": true,
+    "entryVisibleAfterPageRefresh": true,
+    "autoPlayEnabledDuringCheck": false,
+    "pausedConfigurationSaved": true,
+    "temporaryConfigurationRemoved": true,
+    "pageErrors": []
+  },
+  "role_profile_tests": {
+    "found": 2,
+    "succeeded": 2,
+    "failed": 0,
+    "aborted": 0
+  },
+  "frontend_entry_and_api_assertions": 17,
+  "existing_frontend_assertions": 21,
+  "all_protected_configuration_hashes_unchanged": true,
+  "device_transport_and_channels_unchanged": true,
+  "auto_play_tasks_after_test": 0,
+  "previous_release": "/srv/apps/test-wvp/releases/7354a98a627f698b6639b97ea7495c02c1572fc5",
+  "free_bytes": 2205319168,
+  "formal_source_archive": "wvp-正式环境原包结构-自动续播与日志修复-20261110-入口修复.tar.gz",
+  "formal_source_sha256": "3687b0879da544e5a426da8aa41e3a85a34fcc673770b148a7e275f098e8d140",
+  "formal_server_deployed": false,
+  "checked_at": "2026-11-10T14:57:32.114467+08:00"
+}
