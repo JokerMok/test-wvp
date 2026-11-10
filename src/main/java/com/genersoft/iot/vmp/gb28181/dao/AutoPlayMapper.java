@@ -10,7 +10,7 @@ public interface AutoPlayMapper {
         "a.revision,a.status,a.failure_count failureCount,a.quiet_count quietCount,a.last_error lastError," +
         "a.last_check_time lastCheckTime,a.next_check_time nextCheckTime,a.last_success_time lastSuccessTime," +
         "a.lease_owner leaseOwner,a.lease_until leaseUntil,a.media_server_id mediaServerId,a.app,a.stream_id streamId";
-    @Select("SELECT " + COLUMNS + ",c.gb_name channelName,c.gb_device_id channelCode FROM wvp_auto_play a LEFT JOIN wvp_device_channel c ON c.id=a.channel_id WHERE a.server_id=#{serverId} ORDER BY a.channel_id")
+    @Select("SELECT " + COLUMNS + ",COALESCE(c.gb_name,c.name) channelName,COALESCE(c.gb_device_id,c.device_id) channelCode FROM wvp_auto_play a LEFT JOIN wvp_device_channel c ON c.id=a.channel_id WHERE a.server_id=#{serverId} ORDER BY a.channel_id")
     List<AutoPlayTask> list(String serverId);
 
     @Select("SELECT " + COLUMNS + " FROM wvp_auto_play a WHERE a.server_id=#{serverId} AND a.channel_id=#{channelId}")

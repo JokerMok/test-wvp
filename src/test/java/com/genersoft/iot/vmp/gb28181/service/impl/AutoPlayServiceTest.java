@@ -29,7 +29,7 @@ class AutoPlayServiceTest {
         when(mapper.get("test",200)).thenReturn(task);when(mapper.preparing(any())).thenReturn(1);when(mapper.finish(any())).thenReturn(1);
         channel=new CommonGBChannel();channel.setGbId(200);channel.setGbDeviceId("camera");channel.setGbStatus("ON");channel.setDataType(ChannelDataType.GB28181);channel.setDataDeviceId(1);
         when(channels.getOne(200)).thenReturn(channel);Device device=new Device();device.setOnLine(true);device.setDeviceId("device");when(devices.getDevice(1)).thenReturn(device);
-        DeviceChannel source=new DeviceChannel();source.setId(145);when(deviceChannels.getOneForSourceById(200)).thenReturn(source);
+        DeviceChannel source=new DeviceChannel();source.setId(145);source.setDeviceId("camera");when(deviceChannels.getOneForSourceById(200)).thenReturn(source);
         media=new MediaServer();media.setId("zlm");media.setType("zlm");when(mediaServers.getDefaultMediaServer()).thenReturn(media);when(mediaServers.getOne("zlm")).thenReturn(media);
     }
     @AfterEach void close(){service.close();}
@@ -38,14 +38,23 @@ class AutoPlayServiceTest {
         JSONObject item=new JSONObject();item.put("app","rtp");item.put("stream","device_camera");item.put("schema","rtsp");item.put("bytesSpeed",speed);item.put("tracks",JSONArray.of(track));
         ZLMResult<JSONArray> r=new ZLMResult<>();r.setCode(0);r.setData(JSONArray.of(item));return r;
     }
+    ZLMResult<JSONArray> empty(){ZLMResult<JSONArray> r=new ZLMResult<>();r.setCode(0);r.setData(new JSONArray());return r;}
+    void signalOffline(){((IDeviceService)ReflectionTestUtils.getField(service,"deviceService")).getDevice(1).setOnLine(false);}
+    @Test void actualMediaKeepsPlayingDespiteOfflineRegistration(){signalOffline();when(zlm.getMediaList(any(),any(),any())).thenReturn(result(100,true));service.check(task);assertEquals("PLAYING",task.getStatus());verifyNoInteractions(play);}
+    @Test void actualMediaWinsOverAStaleOfflineChannelReport(){channel.setGbStatus("OFF");when(zlm.getMediaList(any(),any(),any())).thenReturn(result(100,true));service.check(task);assertEquals("PLAYING",task.getStatus());verifyNoInteractions(play);}
+    @Test void absentMediaWaitsForRegistrationEvenIfChannelReportsOnline(){signalOffline();when(zlm.getMediaList(any(),any(),any())).thenReturn(empty());service.check(task);assertEquals("SIGNAL_OFFLINE",task.getStatus());verifyNoInteractions(play);}
+    @Test void mediaApiFailureCannotBeMisreportedAsAnOfflineDevice(){signalOffline();when(zlm.getMediaList(any(),any(),any())).thenReturn(null);service.check(task);assertEquals("UNKNOWN",task.getStatus());verifyNoInteractions(play);}
+    @Test void stalledMediaIsNotClosedWhenSignalingCannotRestartIt(){signalOffline();task.setQuietCount(1);when(zlm.getMediaList(any(),any(),any())).thenReturn(result(0,true));service.check(task);assertEquals("SIGNAL_OFFLINE",task.getStatus());assertEquals(0,task.getQuietCount());verifyNoInteractions(play);}
+    @Test void aPublishingIdOverrideDoesNotChangeTheActualSourceStream(){channel.setGbDeviceId("published-camera");when(zlm.getMediaList(any(),any(),any())).thenReturn(result(100,true));service.check(task);assertEquals("device_camera",task.getStreamId());assertEquals("PLAYING",task.getStatus());verify(zlm).getMediaList(media,"rtp","device_camera");verifyNoInteractions(play);}
+    @Test void successfulEmptyResponseWithoutDataStartsRecovery(){ZLMResult<JSONArray> r=new ZLMResult<>();r.setCode(0);when(zlm.getMediaList(any(),any(),any())).thenReturn(r);service.check(task);assertEquals("device_camera",task.getStreamId());verify(play).play(eq(channel),isNull(),anyBoolean(),any());}
     @Test void mediaQueryFailureIsUnknownAndNeverStartsOrStopsStream(){when(zlm.getMediaList(any(),any(),any())).thenReturn(null);service.check(task);assertEquals("UNKNOWN",task.getStatus());verifyNoInteractions(play);}
     @Test void healthySourceDoesNotRestartOrResetRecoveryVersion(){task.setLastSuccessTime(123L);when(zlm.getMediaList(any(),any(),any())).thenReturn(result(100,true));service.check(task);assertEquals("PLAYING",task.getStatus());assertEquals(123L,task.getLastSuccessTime());verifyNoInteractions(play);}
     @Test void firstQuietSampleWaitsAndSecondSampleRecovers(){
         when(zlm.getMediaList(any(),any(),any())).thenReturn(result(0,true));service.check(task);assertEquals("QUIET",task.getStatus());verifyNoInteractions(play);
         service.check(task);verify(play).stopPlay(channel);verify(play).play(eq(channel),isNull(),anyBoolean(),any());
     }
-    @Test void pendingSourceChannelIsNotStartedTwice(){when(invites.isPlayPending(145)).thenReturn(true);service.check(task);verifyNoInteractions(zlm,play);assertEquals("WAITING",task.getStatus());}
-    @Test void offlineDeviceWaits(){channel.setGbStatus("OFF");service.check(task);verifyNoInteractions(zlm,play);assertEquals("OFFLINE",task.getStatus());}
+    @Test void pendingSourceChannelIsNotStartedTwice(){when(zlm.getMediaList(any(),any(),any())).thenReturn(empty());when(invites.isPlayPending(145)).thenReturn(true);service.check(task);verifyNoInteractions(play);assertEquals("WAITING",task.getStatus());}
+    @Test void offlineReportedChannelWaitsOnlyWhenMediaIsMissing(){channel.setGbStatus("OFF");when(zlm.getMediaList(any(),any(),any())).thenReturn(empty());service.check(task);verifyNoInteractions(play);assertEquals("CHANNEL_OFFLINE",task.getStatus());}
     @Test void stoppedOrReconfiguredTaskCannotDoWork(){task.setEnabled(false);service.check(task);verifyNoInteractions(zlm,play);}
     @Test void missingSourceStartsOnceAndLateSuccessCannotOverrideManualPause(){
         ZLMResult<JSONArray> empty=new ZLMResult<>();empty.setCode(0);empty.setData(new JSONArray());when(zlm.getMediaList(any(),any(),any())).thenReturn(empty);

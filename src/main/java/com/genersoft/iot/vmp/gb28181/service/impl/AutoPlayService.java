@@ -90,15 +90,19 @@ public class AutoPlayService {
             if (!current(task)) return;
             CommonGBChannel channel=channelService.getOne(task.getChannelId());
             if (channel==null) { mapper.pause(task.getServerId(),task.getChannelId(),"通道已删除");return; }
-            if (!"ON".equalsIgnoreCase(channel.getGbStatus())) { settle(task,"OFFLINE","设备离线，等待上线",interval(task),false);return; }
-            DeviceChannel sourceChannel = Integer.valueOf(ChannelDataType.GB28181).equals(channel.getDataType()) ? deviceChannels.getOneForSourceById(channel.getGbId()) : null;
-            if (invites.isPlayPending(sourceChannel == null ? channel.getGbId() : sourceChannel.getId())) { settle(task,"WAITING","点播正在建立",interval(task),false);return; }
+            boolean gb = Integer.valueOf(ChannelDataType.GB28181).equals(channel.getDataType());
+            DeviceChannel sourceChannel = gb ? deviceChannels.getOneForSourceById(channel.getGbId()) : null;
             String stream=task.getStreamId();String app=task.getApp()==null?"rtp":task.getApp();
             if (channel.getStreamId()!=null && !channel.getStreamId().isBlank()) stream=channel.getStreamId();
-            if (Integer.valueOf(ChannelDataType.GB28181).equals(channel.getDataType())) {
-                Device device=deviceService.getDevice(channel.getDataDeviceId());
-                if (device==null || !device.isOnLine()) { settle(task,"OFFLINE","所属设备离线，等待上线",interval(task),false);return; }
-                stream=device.getDeviceId()+"_"+channel.getGbDeviceId();app="rtp";
+            Device device = null;
+            if (gb) {
+                if (sourceChannel==null || sourceChannel.getDeviceId()==null || sourceChannel.getDeviceId().isBlank()) {
+                    settle(task,"UNKNOWN","源通道信息缺失，暂不点播",interval(task),false);return;
+                }
+                device=deviceService.getDevice(channel.getDataDeviceId());
+                // Media is named by the source channel ID, not its optional GB publishing override.
+                if (device!=null) stream=device.getDeviceId()+"_"+sourceChannel.getDeviceId();
+                app="rtp";
             }
             MediaServer media=stream==null?null:mediaServers.getMediaServerByAppAndStream(app,stream);
             if (media==null && task.getMediaServerId()!=null) media=mediaServers.getOne(task.getMediaServerId());
@@ -108,6 +112,20 @@ public class AutoPlayService {
             Health health=probe(media,app,stream);
             if (health==Health.UNKNOWN) { task.setQuietCount(0); settle(task,"UNKNOWN","媒体状态查询失败，暂不重拉",interval(task),false);return; }
             if (health==Health.HEALTHY) { task.setQuietCount(0);task.setFailureCount(0);settle(task,"PLAYING","",interval(task),false);return; }
+            // A registration timeout must not hide a healthy source or close a flow still receiving RTP.
+            if (invites.isPlayPending(sourceChannel == null ? channel.getGbId() : sourceChannel.getId())) {
+                task.setQuietCount(0);settle(task,"WAITING","点播正在建立",interval(task),false);return;
+            }
+            if (gb && device==null) { task.setQuietCount(0);settle(task,"UNKNOWN","所属设备信息缺失，暂不点播",interval(task),false);return; }
+            if (gb && !device.isOnLine()) {
+                task.setQuietCount(0);settle(task,"SIGNAL_OFFLINE","未检测到正常媒体；所属设备当前未注册，等待注册后续播",interval(task),false);return;
+            }
+            if (!"ON".equalsIgnoreCase(channel.getGbStatus())) {
+                task.setQuietCount(0);
+                if ("OFF".equalsIgnoreCase(channel.getGbStatus())) settle(task,"CHANNEL_OFFLINE","通道上报离线，等待上线",interval(task),false);
+                else settle(task,"UNKNOWN","通道状态未知，下一轮复核",interval(task),false);
+                return;
+            }
             if (health==Health.QUIET) {
                 task.setQuietCount(value(task.getQuietCount())+1);
                 if (task.getQuietCount()<2) { settle(task,"QUIET","视频数据暂未增长，下一轮复核",interval(task),false);return; }
@@ -150,8 +168,9 @@ public class AutoPlayService {
 
     Health probe(MediaServer media,String app,String stream) {
         ZLMResult<JSONArray> result=zlm.getMediaList(media,app,stream==null || stream.isBlank() ? "__wvp_auto_health_probe__" : stream);
-        if (result==null || result.getCode()!=0 || result.getData()==null) return Health.UNKNOWN;
-        if (stream==null || stream.isBlank()) return Health.MISSING;
+        if (result==null || result.getCode()!=0) return Health.UNKNOWN;
+        // ZLM returns only {"code":0} when no matching source exists.
+        if (result.getData()==null || stream==null || stream.isBlank()) return Health.MISSING;
         JSONObject found=null;
         for (Object item : result.getData()) {
             JSONObject info=(JSONObject)item;
