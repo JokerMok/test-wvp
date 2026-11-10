@@ -29,6 +29,7 @@ const getDefaultState = () => {
     token: getToken(),
     name: '',
     serverId: '',
+    authority: null,
     defaultPassword: getDefaultPassword(),
     showConfirmBoxForLoginLose: true
   }
@@ -48,6 +49,9 @@ const mutations = {
   },
   SET_SERVER_ID: (state, serverId) => {
     state.serverId = serverId
+  },
+  SET_AUTHORITY: (state, authority) => {
+    state.authority = [0, 1, 2, '0', '1', '2'].includes(authority) ? Number(authority) : null
   },
   SET_DEFAULT_PASSWORD: (state, defaultPassword) => {
     state.defaultPassword = defaultPassword
@@ -70,6 +74,7 @@ const actions = {
         commit('SET_TOKEN', data.accessToken)
         commit('SET_NAME', data.username)
         commit('SET_SERVER_ID', data.serverId)
+        commit('SET_AUTHORITY', data.role && data.role.authority)
         commit('SET_DEFAULT_PASSWORD', !!data.defaultPassword)
         commit('SET_CONFIRM_BOX', true)
         setToken(data.accessToken)
@@ -112,6 +117,7 @@ const actions = {
     return new Promise((resolve, reject) => {
       getUserInfo().then(response => {
         const { data } = response
+        commit('SET_AUTHORITY', data.role && data.role.authority)
         resolve(data)
       }).catch(error => {
         reject(error)

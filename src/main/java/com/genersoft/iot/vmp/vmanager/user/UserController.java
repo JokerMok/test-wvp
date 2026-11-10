@@ -238,6 +238,9 @@ public class UserController {
             throw new ControllerException(ErrorCode.ERROR100);
         }
         User user = userService.getUser(userInfo.getUsername(), userInfo.getPassword());
+        if (user != null && user.getRole() != null) {
+            user.setRole(roleService.getRoleById(user.getRole().getId()));
+        }
         return new LoginUser(user, LocalDateTime.now());
     }
 }

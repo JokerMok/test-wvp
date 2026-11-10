@@ -37,6 +37,14 @@ router.beforeEach(async(to, from, next) => {
         NProgress.done()
         return
       }
+      if (store.getters.authority === null && !store.state.user.defaultPassword) {
+        // A page refresh restores the token from cookies, then reloads its role from the server.
+        try {
+          await store.dispatch('user/getUserInfo')
+        } catch (error) {
+          // Keep privileged controls hidden; request errors already provide login feedback.
+        }
+      }
       next()
     }
   } else {
